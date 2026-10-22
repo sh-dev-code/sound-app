@@ -1,18 +1,66 @@
-:root {
-  --bg: #12161f;
-  --surface: #1c2230;
-  --surface-2: #262e40;
-  --text: #e8ebf2;
-  --muted: #98a1b3;
-  --accent: #7fb2a6;
-  --accent-text: #0f1a17;
+/* ---- 配色（設定画面で選ぶ）。--accent は集中モード、[data-mode="baby"] は赤ちゃんモードの色 ---- */
+
+:root,
+body[data-theme="night"] {
+  --bg: #10131c;
+  --surface: #1a1f2d;
+  --surface-2: #252b3d;
+  --text: #e9ecf4;
+  --muted: #959db0;
+  --accent: #8fb9c9;
+  --accent-text: #0e1a20;
+  --star: #f0c75e;
+  --danger: #ef8f8f;
+  --danger-border: #57363c;
+  --shadow: rgba(0, 0, 0, 0.45);
   --radius: 14px;
 }
+body[data-theme="night"][data-mode="baby"] { --accent: #c9b2e0; --accent-text: #1d1426; }
 
-body[data-mode="baby"] {
-  --accent: #c3a6d9;
-  --accent-text: #1d1426;
+body[data-theme="forest"] {
+  --bg: #0f1714;
+  --surface: #18231e;
+  --surface-2: #22302a;
+  --text: #e6efe8;
+  --muted: #93a69b;
+  --accent: #9cc79a;
+  --accent-text: #10180f;
+  --star: #e8c468;
+  --danger: #ec9a8c;
+  --danger-border: #4d3631;
+  --shadow: rgba(0, 0, 0, 0.45);
 }
+body[data-theme="forest"][data-mode="baby"] { --accent: #e0b98f; --accent-text: #261a0e; }
+
+body[data-theme="warm"] {
+  --bg: #f5eee5;
+  --surface: #fffaf3;
+  --surface-2: #ebe0d2;
+  --text: #3d342c;
+  --muted: #86786a;
+  --accent: #b5714f;
+  --accent-text: #ffffff;
+  --star: #cf9418;
+  --danger: #b4473f;
+  --danger-border: #e2c2bb;
+  --shadow: rgba(80, 60, 40, 0.18);
+}
+body[data-theme="warm"][data-mode="baby"] { --accent: #a9768f; --accent-text: #ffffff; }
+
+body[data-theme="clean"] {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-2: #e6eaf0;
+  --text: #1e2530;
+  --muted: #6b7584;
+  --accent: #2f7fb8;
+  --accent-text: #ffffff;
+  --star: #d39a12;
+  --danger: #c0392b;
+  --danger-border: #efc9c4;
+  --shadow: rgba(30, 40, 60, 0.15);
+}
+body[data-theme="clean"][data-mode="baby"] { --accent: #8a6cc7; --accent-text: #ffffff; }
 
 * { box-sizing: border-box; }
 
@@ -78,7 +126,7 @@ main {
   width: min(448px, calc(100vw - 32px));
   background: var(--surface-2);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 24px var(--shadow);
   padding: 14px 16px 10px;
   text-align: center;
   z-index: 20;
@@ -99,7 +147,7 @@ main {
 }
 
 .rating-stars button.lit,
-.rating-stars button:active { color: #f2c94c; }
+.rating-stars button:active { color: var(--star); }
 
 .rating-skip {
   margin-top: 2px;
@@ -128,7 +176,7 @@ main {
 
 .lib-meta { font-size: 0.75rem; color: var(--muted); }
 
-.lib-stars { font-size: 0.85rem; color: #f2c94c; white-space: nowrap; }
+.lib-stars { font-size: 0.85rem; color: var(--star); white-space: nowrap; }
 
 .lib-stars.unrated { color: var(--muted); }
 
@@ -159,7 +207,7 @@ button:disabled { opacity: 0.4; }
 
 .primary { background: var(--accent); color: var(--accent-text); }
 
-.danger { background: transparent; color: #f08a8a; border: 1px solid #5a3a40; }
+.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger-border); }
 
 .back { align-self: flex-start; background: transparent; color: var(--muted); padding: 0; min-height: 40px; }
 
@@ -265,6 +313,34 @@ select.wide { width: 100%; min-height: 48px; }
 .credits { margin: 0; padding-left: 1.2em; font-size: 0.8rem; color: var(--muted); }
 
 .credits a { color: var(--accent); }
+
+.themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+
+.theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border: 2px solid transparent;
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 0.85rem;
+}
+
+.theme-option[aria-pressed="true"] { border-color: var(--accent); font-weight: 600; }
+
+/* 配色の見本：背景・面・集中の色・赤ちゃんの色 */
+.swatch {
+  display: flex;
+  width: 64px;
+  height: 28px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--surface-2);
+}
+
+.swatch span { flex: 1; }
 
 h2 {
   font-size: 0.85rem;

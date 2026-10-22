@@ -5,6 +5,7 @@ const BABY_NOTICE_KEY = 'sound-app:baby-notice-seen';
 
 const DEFAULTS = {
   mode: 'baby',
+  theme: 'night',
   crossfade: 3,
   baby: { sound: 'white', volume: 50, timer: 30 },
   focus: { sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual', playlistId: null },
@@ -17,6 +18,7 @@ export function loadSettings() {
     if (saved) {
       settings.mode = saved.mode || settings.mode;
       settings.crossfade = saved.crossfade ?? settings.crossfade;
+      settings.theme = saved.theme ?? settings.theme;
       Object.assign(settings.baby, saved.baby);
       Object.assign(settings.focus, saved.focus);
     }

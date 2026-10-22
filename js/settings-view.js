@@ -2,6 +2,15 @@
 
 const CROSSFADES = [0, 1, 3, 5, 10];
 
+// 見本の色は css/style.css の配色と合わせる（背景・面・集中の色・赤ちゃんの色）
+const THEMES = [
+  { id: 'night', name: 'よぞら', colors: ['#10131c', '#252b3d', '#8fb9c9', '#c9b2e0'] },
+  { id: 'forest', name: 'もり', colors: ['#0f1714', '#22302a', '#9cc79a', '#e0b98f'] },
+  { id: 'warm', name: 'ぬくもり', colors: ['#f5eee5', '#ebe0d2', '#b5714f', '#a9768f'] },
+  { id: 'clean', name: 'しろ', colors: ['#f3f5f8', '#e6eaf0', '#2f7fb8', '#8a6cc7'] },
+  { id: 'auto', name: '自動', colors: ['#f3f5f8', '#2f7fb8', '#10131c', '#8fb9c9'] },
+];
+
 function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   const { dataset, ...rest } = props;
@@ -11,9 +20,24 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
-// onCrossfade(秒)、onReset('ratings' | 'playlists' | 'all') は変更を実際に行う側の関数
-export function createSettingsView({ root, settings, fileSounds, onCrossfade, onReset }) {
+// onTheme(配色ID)、onCrossfade(秒)、onReset('ratings' | 'playlists' | 'all') は変更を実際に行う側の関数
+export function createSettingsView({ root, settings, fileSounds, onTheme, onCrossfade, onReset }) {
   function render() {
+    const themes = el('div', { className: 'themes' },
+      ...THEMES.map((t) => {
+        const b = el('button', { type: 'button', className: 'theme-option', dataset: { theme: t.id } },
+          el('span', { className: 'swatch' }, ...t.colors.map((c) => {
+            const s = el('span');
+            s.style.background = c;
+            return s;
+          })),
+          el('span', { textContent: t.name }),
+        );
+        b.setAttribute('aria-pressed', t.id === settings.theme);
+        return b;
+      }),
+    );
+
     const crossfade = el('div', { className: 'segmented' },
       ...CROSSFADES.map((s) => {
         const b = el('button', { type: 'button', textContent: s ? `${s}秒` : 'なし', dataset: { crossfade: s } });
@@ -34,6 +58,11 @@ export function createSettingsView({ root, settings, fileSounds, onCrossfade, on
 
     root.replaceChildren(
       el('h1', { className: 'view-title', textContent: '設定' }),
+      el('section', {},
+        el('h2', { textContent: '画面の色' }),
+        themes,
+        el('p', { className: 'note', textContent: '「自動」は iPhone のライト／ダーク設定に合わせて切り替わります。' }),
+      ),
       el('section', {},
         el('h2', { textContent: 'クロスフェード' }),
         crossfade,
@@ -70,7 +99,10 @@ export function createSettingsView({ root, settings, fileSounds, onCrossfade, on
   root.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.crossfade !== undefined) {
+    if (b.dataset.theme) {
+      onTheme(b.dataset.theme);
+      render();
+    } else if (b.dataset.crossfade !== undefined) {
       onCrossfade(Number(b.dataset.crossfade));
       render();
     } else if (b.dataset.reset && confirm(MESSAGES[b.dataset.reset])) {

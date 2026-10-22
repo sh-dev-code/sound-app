@@ -480,6 +480,16 @@ function renderSoundChoices() {
   );
 }
 
+// 「自動」は iPhone のライト／ダーク設定に合わせて「しろ」か「よぞら」にする
+const darkScheme = matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() {
+  const theme = settings.theme === 'auto' ? (darkScheme.matches ? 'night' : 'clean') : settings.theme;
+  document.body.dataset.theme = theme;
+  const bg = getComputedStyle(document.body).getPropertyValue('--bg').trim();
+  document.querySelector('meta[name="theme-color"]').content = bg;
+}
+darkScheme.addEventListener('change', applyTheme);
+
 function render() {
   document.body.dataset.mode = settings.mode;
   for (const b of els.modes) b.setAttribute('aria-pressed', b.dataset.mode === settings.mode);
@@ -622,6 +632,11 @@ const settingsView = createSettingsView({
   root: els.views.settings,
   settings,
   fileSounds: () => sounds.filter((s) => s.type === 'file'),
+  onTheme: (theme) => {
+    settings.theme = theme;
+    saveSettings(settings);
+    applyTheme();
+  },
   onCrossfade: (seconds) => {
     settings.crossfade = seconds;
     saveSettings(settings);
@@ -735,6 +750,7 @@ document.addEventListener('visibilitychange', () => {
 // ---- 起動 ----
 
 async function init() {
+  applyTheme();
   try {
     ({ sounds, categories } = await loadLibrary());
   } catch (e) {
