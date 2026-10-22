@@ -73,21 +73,34 @@ export class SoundEngine {
     this.queue(buffer, 0, sourceGain);
   }
 
-  // 再生開始から offset 秒の時点で、今の音から buffer の音へ切り替える
-  queue(buffer, offset, sourceGain = 1) {
+  // 再生開始から offset 秒の時点で、今の音から buffer の音へ切り替える。
+  // crossfade 秒をかけて、前の音を小さく・次の音を大きくしていく
+  queue(buffer, offset, sourceGain = 1, crossfade = 0) {
     const s = this.session;
     if (!s) return;
     const at = s.startTime + offset;
+    const fade = s.current ? crossfade : 0;
+
     const gain = this.ctx.createGain();
-    gain.gain.value = sourceGain;
+    gain.gain.setValueAtTime(fade ? 0 : sourceGain, at);
+    if (fade) gain.gain.linearRampToValueAtTime(sourceGain, at + fade);
     gain.connect(s.envelope);
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
     source.connect(gain);
     source.start(at);
-    if (s.current) safeStop(s.current, at);
+
+    if (s.current) {
+      if (fade) {
+        s.currentGain.gain.setValueAtTime(s.currentLevel, at);
+        s.currentGain.gain.linearRampToValueAtTime(0, at + fade);
+      }
+      safeStop(s.current, at + fade);
+    }
     s.current = source;
+    s.currentGain = gain;
+    s.currentLevel = sourceGain;
     s.sources.push(source);
   }
 

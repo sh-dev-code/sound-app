@@ -28,7 +28,14 @@
     <div id="play-method" class="segmented">
       <button type="button" data-method="manual">選んで再生</button>
       <button type="button" data-method="omakase">おまかせ</button>
+      <button type="button" data-method="playlist">プレイリスト</button>
     </div>
+
+    <section id="playlist-panel">
+      <h2>プレイリスト</h2>
+      <select id="playlist-pick" class="wide" aria-label="流すプレイリスト"></select>
+      <p id="playlist-summary" class="note"></p>
+    </section>
 
     <section id="sounds-section">
       <h2>音</h2>
@@ -36,7 +43,7 @@
     </section>
     <p id="omakase-note" class="notice">集中1回ごとに音が変わります。まだ試していない音を優先し、慣れてきたら★の高い音が選ばれやすくなります。集中が終わったら★で評価してください。</p>
 
-    <section>
+    <section id="timer-section">
       <h2>タイマー</h2>
       <div id="baby-timer" class="segmented"></div>
       <div id="focus-timer" class="timer-row">
@@ -77,9 +84,15 @@
     <ul id="library-list" class="lib-list"></ul>
   </main>
 
+  <main id="view-playlists" hidden></main>
+
+  <main id="view-settings" hidden></main>
+
   <nav class="tabbar" aria-label="画面">
     <button type="button" data-view="play">再生</button>
     <button type="button" data-view="library">ライブラリ</button>
+    <button type="button" data-view="playlists">プレイリスト</button>
+    <button type="button" data-view="settings">設定</button>
   </nav>
 
   <dialog id="baby-dialog">

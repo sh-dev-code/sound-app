@@ -21,6 +21,12 @@ function save(ratings) {
   }
 }
 
+export function resetRatings(ratings) {
+  ratings.baby = {};
+  ratings.focus = {};
+  save(ratings);
+}
+
 export function statsOf(ratings, mode, id) {
   return ratings[mode][id] || { tried: 0, sum: 0, count: 0 };
 }

@@ -5,8 +5,9 @@ const BABY_NOTICE_KEY = 'sound-app:baby-notice-seen';
 
 const DEFAULTS = {
   mode: 'baby',
+  crossfade: 3,
   baby: { sound: 'white', volume: 50, timer: 30 },
-  focus: { sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual' },
+  focus: { sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual', playlistId: null },
 };
 
 export function loadSettings() {
@@ -15,6 +16,7 @@ export function loadSettings() {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
     if (saved) {
       settings.mode = saved.mode || settings.mode;
+      settings.crossfade = saved.crossfade ?? settings.crossfade;
       Object.assign(settings.baby, saved.baby);
       Object.assign(settings.focus, saved.focus);
     }
@@ -29,6 +31,17 @@ export function saveSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch {
     // 保存できなくても動作は続ける
+  }
+}
+
+// このアプリが端末内に保存したものをすべて消す
+export function clearAllData() {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('sound-app:')) localStorage.removeItem(key);
+    }
+  } catch {
+    // 保存領域が使えない環境では何もしない
   }
 }
 

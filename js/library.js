@@ -29,7 +29,10 @@ export function loadBuffer(ctx, sound) {
     cache.set(sound.id, promise);
     return promise;
   }
-  const promise = sound.type === 'file' ? fileBuffer(ctx, sound) : noiseBuffer(ctx, sound);
+  const promise =
+    sound.type === 'file' ? fileBuffer(ctx, sound)
+      : sound.type === 'silence' ? Promise.resolve(ctx.createBuffer(1, SAMPLE_RATE, SAMPLE_RATE))
+        : noiseBuffer(ctx, sound);
   // 失敗したら次回やり直せるようにする
   promise.catch(() => cache.delete(sound.id));
   cache.set(sound.id, promise);
