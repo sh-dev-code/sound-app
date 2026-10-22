@@ -8,8 +8,8 @@ const EDGE_TRIM_SECONDS = 0.05;
 const LOOP_FADE_SECONDS = 1.5;
 // 環境音はノイズより少し控えめの大きさにそろえる
 const FILE_TARGET_RMS = TARGET_RMS * 0.8;
-// 小さすぎる素材を大きくするのは 10 倍まで
-const MAX_BOOST = 10;
+// 小さすぎる素材を大きくするのは 40 倍まで
+const MAX_BOOST = 40;
 const LIMIT = 0.95;
 
 export async function loadLibrary() {
@@ -75,13 +75,27 @@ function prepareLoop(ctx, src) {
     }
   }
 
-  const rms = Math.sqrt(sq / (length * src.numberOfChannels));
-  const scale = Math.min(FILE_TARGET_RMS / rms, MAX_BOOST);
   const channels = [];
   for (let c = 0; c < out.numberOfChannels; c++) channels.push(out.getChannelData(c));
-  for (const y of channels) for (let i = 0; i < length; i++) y[i] *= scale;
-  limit(channels, rate);
+
+  // 大きくする → 大きすぎる瞬間を抑える、を目標の大きさに近づくまでくり返す
+  let rms = Math.sqrt(sq / (length * channels.length));
+  let boost = 1;
+  for (let pass = 0; pass < 3; pass++) {
+    const scale = Math.min(FILE_TARGET_RMS / rms, MAX_BOOST / boost);
+    if (scale < 1.05) break;
+    boost *= scale;
+    for (const y of channels) for (let i = 0; i < length; i++) y[i] *= scale;
+    limit(channels, rate);
+    rms = measureRms(channels);
+  }
   return out;
+}
+
+function measureRms(channels) {
+  let sq = 0;
+  for (const y of channels) for (let i = 0; i < y.length; i++) sq += y[i] * y[i];
+  return Math.sqrt(sq / (channels[0].length * channels.length));
 }
 
 // 焚き火の「パチッ」のような瞬間的に大きな音は、そのまま大きくすると音が割れる。
