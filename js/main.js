@@ -332,7 +332,7 @@ function renderTime() {
     time = formatTime(focusSeconds());
   } else {
     const { k, inRound, resting } = roundAt(elapsed());
-    phase = resting ? '休憩中' : `集中中（${k + 1}回目）`;
+    phase = resting ? '休憩モード' : `集中モード（${k + 1}回目）`;
     time = formatTime((resting ? period() : focusSeconds()) - inRound);
   }
   els.phase.textContent = phase;
