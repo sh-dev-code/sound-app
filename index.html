@@ -10,28 +10,33 @@
 </head>
 <body>
   <main>
-    <h1>音のテスト（ステップ2）</h1>
+    <nav class="segmented mode-switch" aria-label="モード">
+      <button type="button" data-mode="baby">赤ちゃん</button>
+      <button type="button" data-mode="focus">集中</button>
+    </nav>
+
+    <p id="notice" class="notice">音量は小さめに、スマホは赤ちゃんの耳元から離して置いてください。</p>
 
     <section>
       <h2>音</h2>
-      <div class="segmented">
-        <button type="button" data-noise="white">ホワイト</button>
-        <button type="button" data-noise="pink">ピンク</button>
-        <button type="button" data-noise="brown">ブラウン</button>
-      </div>
+      <div id="sounds" class="chips"></div>
     </section>
 
     <section>
-      <h2>鳴らし方</h2>
-      <div class="segmented">
-        <button type="button" data-method="webaudio">方式1（本番）</button>
-        <button type="button" data-method="element">方式2（予備）</button>
+      <h2>タイマー</h2>
+      <div id="baby-timer" class="segmented"></div>
+      <div id="focus-timer" class="timer-row">
+        <label>集中 <select id="focus-min"></select></label>
+        <label>休憩 <select id="break-min"></select></label>
       </div>
-      <p class="note">方式2は予備です。音量はスライダーから指を離したときに変わり、繰り返しの切れ目で途切れます。</p>
     </section>
 
-    <button type="button" id="play">再生</button>
-    <p id="status" aria-live="polite"></p>
+    <div class="player">
+      <p id="phase" class="phase"></p>
+      <p id="time" class="time"></p>
+      <button type="button" id="play" disabled>再生</button>
+      <p id="now-playing" class="now-playing" aria-live="polite"></p>
+    </div>
 
     <section>
       <h2>音量</h2>
@@ -39,12 +44,20 @@
         <input type="range" id="volume" min="0" max="100" value="50" aria-label="音量">
         <span id="volume-value"></span>
       </div>
+      <p id="volume-note" class="note">赤ちゃんモードは、音量を一番大きくしても控えめな大きさまでに抑えています。</p>
     </section>
 
     <details>
-      <summary>動作ログ</summary>
+      <summary>動作ログ（開発用）</summary>
       <ol id="log"></ol>
     </details>
   </main>
+
+  <dialog id="baby-dialog">
+    <h2>赤ちゃんモードを使う前に</h2>
+    <p>音量は小さめにして、スマホは赤ちゃんの耳元から離して置いてください。</p>
+    <p>このアプリは、赤ちゃんやあなたに合う音を探すためのものです。効果には個人差があります。</p>
+    <button type="button" id="baby-dialog-ok">分かりました</button>
+  </dialog>
 </body>
 </html>

@@ -1,37 +1,66 @@
-// ノイズ（ホワイト・ピンク・ブラウン）をプログラムで作る
+// ノイズをプログラムで作る
 
 export const SAMPLE_RATE = 44100;
 const LOOP_SECONDS = 15;
 const LOOP_FADE_SECONDS = 0.5;
 const TARGET_RMS = 0.15;
 
+const white = () => Math.random() * 2 - 1;
+
+// Paul Kellet の近似式
+function pinkSource() {
+  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+  return () => {
+    const w = white();
+    b0 = 0.99886 * b0 + w * 0.0555179;
+    b1 = 0.99332 * b1 + w * 0.0750759;
+    b2 = 0.969 * b2 + w * 0.153852;
+    b3 = 0.8665 * b3 + w * 0.3104856;
+    b4 = 0.55 * b4 + w * 0.5329522;
+    b5 = -0.7616 * b5 - w * 0.016898;
+    const out = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362;
+    b6 = w * 0.115926;
+    return out;
+  };
+}
+
+function brownSource() {
+  let last = 0;
+  return () => {
+    last = (last + 0.02 * white()) / 1.02;
+    return last;
+  };
+}
+
+// 指定した周波数より高い音を弱める
+function lowpass(source, hz) {
+  const a = 1 - Math.exp((-2 * Math.PI * hz) / SAMPLE_RATE);
+  let y = 0;
+  return () => (y += a * (source() - y));
+}
+
+// ゆっくり大きく・小さくなる揺らぎ（ループの長さで割り切れる周波数にすること）
+const pulse = (hz, depth) => (out) => {
+  for (let i = 0; i < out.length; i++) {
+    const t = i / SAMPLE_RATE;
+    out[i] *= 1 - depth * (0.5 + 0.5 * Math.cos(2 * Math.PI * hz * t));
+  }
+};
+
+// モーターのような低い「ブーン」音を重ねる（ループの長さで割り切れる周波数にすること）
+const hum = (hz, amount) => (out) => {
+  for (let i = 0; i < out.length; i++) {
+    const t = i / SAMPLE_RATE;
+    out[i] += amount * (Math.sin(2 * Math.PI * hz * t) + 0.5 * Math.sin(4 * Math.PI * hz * t));
+  }
+};
+
 const generators = {
-  white() {
-    return () => Math.random() * 2 - 1;
-  },
-  // Paul Kellet の近似式
-  pink() {
-    let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-    return () => {
-      const w = Math.random() * 2 - 1;
-      b0 = 0.99886 * b0 + w * 0.0555179;
-      b1 = 0.99332 * b1 + w * 0.0750759;
-      b2 = 0.969 * b2 + w * 0.153852;
-      b3 = 0.8665 * b3 + w * 0.3104856;
-      b4 = 0.55 * b4 + w * 0.5329522;
-      b5 = -0.7616 * b5 - w * 0.016898;
-      const out = b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362;
-      b6 = w * 0.115926;
-      return out;
-    };
-  },
-  brown() {
-    let last = 0;
-    return () => {
-      last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
-      return last;
-    };
-  },
+  white: () => ({ next: white }),
+  pink: () => ({ next: pinkSource() }),
+  brown: () => ({ next: brownSource() }),
+  womb: () => ({ next: lowpass(brownSource(), 350), post: pulse(1.2, 0.35) }),
+  dryer: () => ({ next: lowpass(pinkSource(), 2500), post: hum(120, 0.04) }),
 };
 
 const cache = new Map();
@@ -42,7 +71,7 @@ export function createNoise(type) {
   const make = generators[type];
   if (!make) throw new Error(`未対応のノイズ: ${type}`);
 
-  const next = make();
+  const { next, post } = make();
   for (let i = 0; i < SAMPLE_RATE; i++) next(); // 立ち上がりの揺れを捨てる
 
   const length = LOOP_SECONDS * SAMPLE_RATE;
@@ -71,8 +100,10 @@ export function createNoise(type) {
       const t = i / fade;
       s = raw[i] * Math.sqrt(t) + raw[length + i] * Math.sqrt(1 - t);
     }
-    out[i] = Math.max(-0.99, Math.min(0.99, s * scale));
+    out[i] = s * scale;
   }
+  if (post) post(out);
+  for (let i = 0; i < length; i++) out[i] = Math.max(-0.99, Math.min(0.99, out[i]));
 
   cache.set(type, out);
   return out;
