@@ -1,6 +1,5 @@
 /* ---- 配色（設定画面で選ぶ）。--accent は集中モード、[data-mode="baby"] は赤ちゃんモードの色 ---- */
 
-:root,
 body[data-theme="night"] {
   --bg: #10131c;
   --surface: #1a1f2d;
@@ -13,26 +12,13 @@ body[data-theme="night"] {
   --danger: #ef8f8f;
   --danger-border: #57363c;
   --shadow: rgba(0, 0, 0, 0.45);
-  --radius: 14px;
 }
 body[data-theme="night"][data-mode="baby"] { --accent: #c9b2e0; --accent-text: #1d1426; }
 
-body[data-theme="forest"] {
-  --bg: #0f1714;
-  --surface: #18231e;
-  --surface-2: #22302a;
-  --text: #e6efe8;
-  --muted: #93a69b;
-  --accent: #9cc79a;
-  --accent-text: #10180f;
-  --star: #e8c468;
-  --danger: #ec9a8c;
-  --danger-border: #4d3631;
-  --shadow: rgba(0, 0, 0, 0.45);
-}
-body[data-theme="forest"][data-mode="baby"] { --accent: #e0b98f; --accent-text: #261a0e; }
-
+/* 最初の配色は「ぬくもり」 */
+:root,
 body[data-theme="warm"] {
+  --radius: 14px;
   --bg: #f5eee5;
   --surface: #fffaf3;
   --surface-2: #ebe0d2;

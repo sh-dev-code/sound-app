@@ -168,38 +168,45 @@ export function createPlaylistEditor({ root, playlists, availableSounds, onChang
     onChange();
   });
 
-  // 「≡」をつかんで上下に動かすと並べ替えられる
+  // 「≡」をつかんで上下に動かすと並べ替えられる。
+  // 行を入れ替えると iPhone はつかんでいる要素を見失うため、指の動きは画面全体で追いかける
   root.addEventListener('pointerdown', (e) => {
     const handle = e.target.closest('.drag-handle');
     if (!handle) return;
     e.preventDefault();
     const row = handle.closest('.pl-item');
     const list = row.parentElement;
-    handle.setPointerCapture(e.pointerId);
+    const pointerId = e.pointerId;
     row.classList.add('dragging');
 
     const onMove = (ev) => {
+      if (ev.pointerId !== pointerId) return;
       const others = [...list.children].filter((r) => r !== row);
       const after = others.find((r) => {
         const box = r.getBoundingClientRect();
         return ev.clientY < box.top + box.height / 2;
       });
-      if (after) list.insertBefore(row, after);
-      else list.append(row);
+      if (after && row.nextElementSibling !== after) list.insertBefore(row, after);
+      else if (!after && list.lastElementChild !== row) list.append(row);
     };
-    const onUp = () => {
-      handle.removeEventListener('pointermove', onMove);
-      handle.removeEventListener('pointerup', onUp);
-      handle.removeEventListener('pointercancel', onUp);
+    // ドラッグ中に画面がスクロールしないようにする
+    const blockScroll = (ev) => ev.preventDefault();
+    const onUp = (ev) => {
+      if (ev.pointerId !== pointerId) return;
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      document.removeEventListener('pointercancel', onUp);
+      document.removeEventListener('touchmove', blockScroll);
       row.classList.remove('dragging');
       const pl = editing();
       const order = [...list.children].map((r) => Number(r.dataset.index));
       pl.items = order.map((i) => pl.items[i]);
       commit();
     };
-    handle.addEventListener('pointermove', onMove);
-    handle.addEventListener('pointerup', onUp);
-    handle.addEventListener('pointercancel', onUp);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+    document.addEventListener('touchmove', blockScroll, { passive: false });
   });
 
   return { render };

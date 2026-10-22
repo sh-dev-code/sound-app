@@ -6,7 +6,7 @@ import {
   loadPlaylists, savePlaylists, totalSeconds, itemAt, startOf, indexAt, formatMinutes, SILENCE,
 } from './playlists.js';
 import { createPlaylistEditor } from './playlist-editor.js';
-import { createSettingsView } from './settings-view.js';
+import { createSettingsView, THEMES } from './settings-view.js';
 
 // 赤ちゃんモードの音量上限は集中モードの 40%
 const MAX_GAIN = { baby: 0.4, focus: 1 };
@@ -480,15 +480,13 @@ function renderSoundChoices() {
   );
 }
 
-// 「自動」は iPhone のライト／ダーク設定に合わせて「しろ」か「よぞら」にする
-const darkScheme = matchMedia('(prefers-color-scheme: dark)');
 function applyTheme() {
-  const theme = settings.theme === 'auto' ? (darkScheme.matches ? 'night' : 'clean') : settings.theme;
-  document.body.dataset.theme = theme;
+  // なくなった配色が保存されていたら最初の配色（ぬくもり）にする
+  if (!THEMES.some((t) => t.id === settings.theme)) settings.theme = THEMES[0].id;
+  document.body.dataset.theme = settings.theme;
   const bg = getComputedStyle(document.body).getPropertyValue('--bg').trim();
   document.querySelector('meta[name="theme-color"]').content = bg;
 }
-darkScheme.addEventListener('change', applyTheme);
 
 function render() {
   document.body.dataset.mode = settings.mode;

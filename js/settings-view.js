@@ -3,12 +3,10 @@
 const CROSSFADES = [0, 1, 3, 5, 10];
 
 // 見本の色は css/style.css の配色と合わせる（背景・面・集中の色・赤ちゃんの色）
-const THEMES = [
-  { id: 'night', name: 'よぞら', colors: ['#10131c', '#252b3d', '#8fb9c9', '#c9b2e0'] },
-  { id: 'forest', name: 'もり', colors: ['#0f1714', '#22302a', '#9cc79a', '#e0b98f'] },
+export const THEMES = [
   { id: 'warm', name: 'ぬくもり', colors: ['#f5eee5', '#ebe0d2', '#b5714f', '#a9768f'] },
   { id: 'clean', name: 'しろ', colors: ['#f3f5f8', '#e6eaf0', '#2f7fb8', '#8a6cc7'] },
-  { id: 'auto', name: '自動', colors: ['#f3f5f8', '#2f7fb8', '#10131c', '#8fb9c9'] },
+  { id: 'night', name: 'よぞら', colors: ['#10131c', '#252b3d', '#8fb9c9', '#c9b2e0'] },
 ];
 
 function el(tag, props = {}, ...children) {
@@ -61,7 +59,6 @@ export function createSettingsView({ root, settings, fileSounds, onTheme, onCros
       el('section', {},
         el('h2', { textContent: '画面の色' }),
         themes,
-        el('p', { className: 'note', textContent: '「自動」は iPhone のライト／ダーク設定に合わせて切り替わります。' }),
       ),
       el('section', {},
         el('h2', { textContent: 'クロスフェード' }),
