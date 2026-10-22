@@ -13,7 +13,9 @@ const els = {
   log: document.getElementById('log'),
 };
 
-const state = { noise: 'white', method: 'element', playing: false };
+// 本番は方式1。方式2は iOS の更新で方式1が止まるようになったときの予備
+// （方式2は繰り返しの切れ目で一瞬途切れる）
+const state = { noise: 'white', method: 'webaudio', playing: false };
 
 function log(message) {
   const time = new Date().toLocaleTimeString('ja-JP');
