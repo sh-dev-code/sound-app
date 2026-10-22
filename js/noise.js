@@ -3,7 +3,8 @@
 export const SAMPLE_RATE = 44100;
 const LOOP_SECONDS = 15;
 const LOOP_FADE_SECONDS = 0.5;
-const TARGET_RMS = 0.15;
+// 音の大きさの基準（音声ファイルもこの大きさにそろえる）
+export const TARGET_RMS = 0.15;
 
 const white = () => Math.random() * 2 - 1;
 

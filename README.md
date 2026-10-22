@@ -19,21 +19,24 @@ sounds/        音声ファイル（.mp3 / .m4a）
 ## 音の追加方法
 
 1. 音声ファイル（`.mp3` か `.m4a`）を `sounds/` フォルダに置く
+   - 長さは **3分以内・3MB以内** が目安。iPhone は読み込んだ音をメモリに展開するため、長すぎると重くなる
+   - 繰り返しのつなぎ目と音の大きさはアプリが自動で整えるので、加工は不要
 2. `sounds.json` の `sounds` の中に1行足す（前の行の末尾に `,` を付けるのを忘れずに）
 
 ```json
-{ "id": "rain", "name": "雨", "type": "file", "file": "rain.mp3", "modes": ["focus"], "gain": 1.0, "credit": { "author": "作者名", "source": "https://入手元のURL", "license": "CC0" } }
+{ "id": "rain", "name": "雨", "category": "nature", "type": "file", "file": "rain.mp3", "modes": ["focus"], "gain": 1.0, "credit": { "title": "素材名", "author": "作者名", "source": "https://入手元のURL", "license": "CC0" } }
 ```
 
 | 項目 | 意味 |
 | --- | --- |
 | `id` | 音の識別名（英数字）。評価やプレイリストはこの名前で記録するので、後から変えない |
 | `name` | 画面に出す名前 |
+| `category` | 種類。再生画面ではこの種類ごとに見出しを付けて並べる。種類の一覧は `sounds.json` の `categories` にあり、増やすときはそこに1行足す |
 | `type` | `generated`（プログラムで作る音）か `file`（音声ファイル） |
 | `generator` | `generated` のときの音の種類：`white` / `pink` / `brown` / `womb`（胎内音風）/ `dryer`（ドライヤー風） |
 | `file` | `file` のときの音声ファイル名（`sounds/` フォルダ内） |
 | `modes` | 使えるモード：`baby`（赤ちゃん）、`focus`（集中） |
-| `gain` | 音ごとの音量補正（1.0 が基準）。音によって聞こえる大きさがバラバラにならないよう揃える |
+| `gain` | 音ごとの音量の微調整（1.0 が基準）。大きさは自動でそろえるが、それでも大きく・小さく聞こえる音だけ調整する |
 | `credit` | 素材の作者・入手元・ライセンス。音声ファイルの場合は必須 |
 
 ## 素材のルール

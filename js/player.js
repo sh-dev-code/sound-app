@@ -4,7 +4,7 @@
 // （AudioContext の時刻）にあらかじめ予約する。iPhone で画面を消すとプログラムの
 // 時計は遅れることがあるが、音の側の時計は遅れないため。
 
-import { SAMPLE_RATE, encodeWav } from './noise.js';
+import { encodeWav } from './noise.js';
 
 const FADE_SECONDS = 0.3;
 const PHASE_FADE_SECONDS = 3;
@@ -33,16 +33,20 @@ export class SoundEngine {
     this.session = null;
   }
 
-  ensureContext() {
-    if (this.ctx) return;
-    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-    this.ctx.onstatechange = () => this.log(`音の状態: ${this.ctx.state}`);
+  // iPhone では、音を出す準備は画面を押した瞬間にしかできないため、
+  // 音声ファイルの読み込みを待つ前にこれを呼ぶ
+  unlock() {
+    preferPlayback();
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.ctx.onstatechange = () => this.log(`音の状態: ${this.ctx.state}`);
+    }
+    this.ctx.resume();
+    return this.ctx;
   }
 
-  start(samples, { volume, lowpassHz }) {
-    preferPlayback();
-    this.ensureContext();
-    this.ctx.resume();
+  start(buffer, { volume, lowpassHz }) {
+    this.unlock();
     this.stop();
 
     const ctx = this.ctx;
@@ -65,8 +69,6 @@ export class SoundEngine {
       envelope.connect(master);
     }
 
-    const buffer = ctx.createBuffer(1, samples.length, SAMPLE_RATE);
-    buffer.getChannelData(0).set(samples);
     const source = ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = true;

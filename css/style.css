@@ -85,6 +85,15 @@ button { font: inherit; color: inherit; }
 
 .mode-switch button { font-size: 1rem; }
 
+#sounds { display: flex; flex-direction: column; gap: 12px; }
+
+.sound-group h3 {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--muted);
+  margin: 0 0 6px 4px;
+}
+
 .chips {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));

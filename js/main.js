@@ -1,4 +1,4 @@
-import { createNoise } from './noise.js';
+import { loadLibrary, loadBuffer } from './library.js';
 import { SoundEngine } from './player.js';
 import { loadSettings, saveSettings, hasSeenBabyNotice, markBabyNoticeSeen } from './storage.js';
 
@@ -34,8 +34,10 @@ const els = {
 };
 
 const settings = loadSettings();
-const state = { playing: false, startedAt: 0, ticker: null };
+// loadToken: 読み込み中に停止や設定変更をしたら、読み込み後の再生を取りやめるための番号
+const state = { playing: false, loading: false, loadToken: 0, startedAt: 0, ticker: null };
 let sounds = [];
+let categories = [];
 
 function log(message) {
   const time = new Date().toLocaleTimeString('ja-JP');
@@ -61,9 +63,28 @@ function formatTime(seconds) {
 
 // ---- 再生・停止 ----
 
-function start() {
+async function start() {
   const sound = currentSound();
-  engine.start(createNoise(sound.generator), {
+  const ctx = engine.unlock();
+  const token = ++state.loadToken;
+  state.loading = true;
+  render();
+
+  let buffer;
+  try {
+    buffer = await loadBuffer(ctx, sound);
+  } catch (e) {
+    if (token === state.loadToken) {
+      state.loading = false;
+      log(`読み込めませんでした: ${e.message}`);
+      render();
+    }
+    return;
+  }
+  if (token !== state.loadToken) return;
+  state.loading = false;
+
+  engine.start(buffer, {
     volume: gain(),
     lowpassHz: settings.mode === 'baby' ? BABY_LOWPASS_HZ : null,
   });
@@ -84,6 +105,8 @@ function start() {
 
 function stop(reason = '停止') {
   engine.stop();
+  state.loadToken++;
+  state.loading = false;
   state.playing = false;
   clearInterval(state.ticker);
   log(reason);
@@ -92,7 +115,7 @@ function stop(reason = '停止') {
 
 // 再生中に音やタイマーを変えたら、新しい設定で最初から鳴らし直す
 function change(update) {
-  const wasPlaying = state.playing;
+  const wasPlaying = state.playing || state.loading;
   if (wasPlaying) stop('設定を変更');
   update();
   saveSettings(settings);
@@ -150,16 +173,33 @@ function render() {
   for (const b of els.modes) b.setAttribute('aria-pressed', b.dataset.mode === settings.mode);
   els.notice.hidden = settings.mode !== 'baby';
 
+  // 音を種類ごとに見出しを付けて並べる
   const selected = currentSound();
+  const available = soundsForMode();
   els.sounds.replaceChildren(
-    ...soundsForMode().map((s) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.sound = s.id;
-      b.textContent = s.name;
-      b.setAttribute('aria-pressed', s === selected);
-      return b;
-    }),
+    ...categories
+      .map((cat) => [cat, available.filter((s) => s.category === cat.id)])
+      .filter(([, list]) => list.length)
+      .map(([cat, list]) => {
+        const group = document.createElement('div');
+        group.className = 'sound-group';
+        const heading = document.createElement('h3');
+        heading.textContent = cat.name;
+        const chips = document.createElement('div');
+        chips.className = 'chips';
+        chips.append(
+          ...list.map((s) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.dataset.sound = s.id;
+            b.textContent = s.name;
+            b.setAttribute('aria-pressed', s === selected);
+            return b;
+          }),
+        );
+        group.append(heading, chips);
+        return group;
+      }),
   );
 
   els.babyTimer.hidden = settings.mode !== 'baby';
@@ -170,8 +210,8 @@ function render() {
   els.focusMin.value = settings.focus.focusMin;
   els.breakMin.value = settings.focus.breakMin;
 
-  els.play.textContent = state.playing ? '停止' : '再生';
-  els.play.classList.toggle('playing', state.playing);
+  els.play.textContent = state.loading ? '読み込み中' : state.playing ? '停止' : '再生';
+  els.play.classList.toggle('playing', state.playing || state.loading);
   els.nowPlaying.textContent = selected ? selected.name : '';
 
   els.volume.value = mode().volume;
@@ -218,7 +258,7 @@ for (const [select, choices] of [[els.focusMin, FOCUS_MINUTES], [els.breakMin, B
 els.focusMin.addEventListener('change', () => change(() => { settings.focus.focusMin = Number(els.focusMin.value); }));
 els.breakMin.addEventListener('change', () => change(() => { settings.focus.breakMin = Number(els.breakMin.value); }));
 
-els.play.addEventListener('click', () => (state.playing ? stop() : start()));
+els.play.addEventListener('click', () => (state.playing || state.loading ? stop() : start()));
 
 els.volume.addEventListener('input', () => {
   mode().volume = Number(els.volume.value);
@@ -233,7 +273,7 @@ els.babyDialogOk.addEventListener('click', () => {
 });
 
 if ('mediaSession' in navigator) {
-  navigator.mediaSession.setActionHandler('play', () => { if (!state.playing) start(); });
+  navigator.mediaSession.setActionHandler('play', () => { if (!state.playing && !state.loading) start(); });
   navigator.mediaSession.setActionHandler('pause', () => { if (state.playing) stop(); });
 }
 
@@ -253,10 +293,7 @@ document.addEventListener('visibilitychange', () => {
 
 async function init() {
   try {
-    const res = await fetch('sounds.json');
-    const data = await res.json();
-    // 音声ファイルの再生はステップ4で対応する
-    sounds = data.sounds.filter((s) => s.type === 'generated');
+    ({ sounds, categories } = await loadLibrary());
   } catch (e) {
     log(`音の一覧を読み込めませんでした: ${e.message}`);
     return;

@@ -1,10 +1,22 @@
 {
   "version": 1,
+  "categories": [
+    { "id": "noise", "name": "ノイズ" },
+    { "id": "nature", "name": "自然の音" },
+    { "id": "life", "name": "生活の音" }
+  ],
   "sounds": [
-    { "id": "white", "name": "ホワイトノイズ", "type": "generated", "generator": "white", "modes": ["baby", "focus"], "gain": 0.8 },
-    { "id": "pink", "name": "ピンクノイズ", "type": "generated", "generator": "pink", "modes": ["focus"], "gain": 0.9 },
-    { "id": "brown", "name": "ブラウンノイズ", "type": "generated", "generator": "brown", "modes": ["focus"], "gain": 1.0 },
-    { "id": "womb", "name": "胎内音風", "type": "generated", "generator": "womb", "modes": ["baby"], "gain": 1.0 },
-    { "id": "dryer", "name": "ドライヤー風", "type": "generated", "generator": "dryer", "modes": ["baby"], "gain": 0.8 }
+    { "id": "white", "name": "ホワイトノイズ", "category": "noise", "type": "generated", "generator": "white", "modes": ["baby", "focus"], "gain": 0.8 },
+    { "id": "pink", "name": "ピンクノイズ", "category": "noise", "type": "generated", "generator": "pink", "modes": ["focus"], "gain": 0.9 },
+    { "id": "brown", "name": "ブラウンノイズ", "category": "noise", "type": "generated", "generator": "brown", "modes": ["focus"], "gain": 1.0 },
+    { "id": "womb", "name": "胎内音風", "category": "noise", "type": "generated", "generator": "womb", "modes": ["baby"], "gain": 1.0 },
+    { "id": "dryer", "name": "ドライヤー風", "category": "life", "type": "generated", "generator": "dryer", "modes": ["baby"], "gain": 0.8 },
+    { "id": "campfire", "name": "焚き火", "category": "nature", "type": "file", "file": "campfire.mp3", "modes": ["focus"], "gain": 1.0, "credit": { "title": "fire ambience, flames, crackles, pops, burning", "author": "ahriik", "source": "https://freesound.org/people/ahriik/sounds/508110/", "license": "CC0" } },
+    { "id": "rain", "name": "雨", "category": "nature", "type": "file", "file": "rain.mp3", "modes": ["baby", "focus"], "gain": 1.0, "credit": { "title": "Rain light 2 (rural)", "author": "jmbphilmes", "source": "https://freesound.org/people/jmbphilmes/sounds/200273/", "license": "CC0" } },
+    { "id": "waves", "name": "波", "category": "nature", "type": "file", "file": "waves.mp3", "modes": ["baby", "focus"], "gain": 1.0, "credit": { "title": "Ocean Waves.wav", "author": "Noted451", "source": "https://freesound.org/people/Noted451/sounds/531015/", "license": "CC0" } },
+    { "id": "stream", "name": "川のせせらぎ", "category": "nature", "type": "file", "file": "stream.mp3", "modes": ["baby", "focus"], "gain": 1.0, "credit": { "title": "Relaxing, Mountains, Rivers, Streams, Running Water（冒頭約2分を使用）", "author": "INNORECORDS", "source": "https://freesound.org/people/INNORECORDS/sounds/469009/", "license": "CC0" } },
+    { "id": "forest", "name": "森", "category": "nature", "type": "file", "file": "forest.mp3", "modes": ["focus"], "gain": 1.0, "credit": { "title": "Park ambience - mostly birds", "author": "Mafon2", "source": "https://freesound.org/people/Mafon2/sounds/274175/", "license": "CC0" } },
+    { "id": "cafe", "name": "カフェ", "category": "life", "type": "file", "file": "cafe.mp3", "modes": ["focus"], "gain": 1.0, "credit": { "title": "People talking at cafe ambience", "author": "priesjensen", "source": "https://freesound.org/people/priesjensen/sounds/482990/", "license": "CC0" } },
+    { "id": "plastic-bag", "name": "レジ袋", "category": "life", "type": "file", "file": "plastic-bag.mp3", "modes": ["baby"], "gain": 1.0, "credit": { "title": "Plastic bag, rustle handling crinkle.wav", "author": "SpliceSound", "source": "https://freesound.org/people/SpliceSound/sounds/218337/", "license": "CC0" } }
   ]
 }
