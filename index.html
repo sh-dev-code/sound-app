@@ -3,9 +3,48 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#12161f">
   <title>音で集中＆寝かしつけ</title>
+  <link rel="stylesheet" href="css/style.css">
+  <script type="module" src="js/main.js"></script>
 </head>
 <body>
-  <p>準備中</p>
+  <main>
+    <h1>音のテスト（ステップ2）</h1>
+
+    <section>
+      <h2>音</h2>
+      <div class="segmented">
+        <button type="button" data-noise="white">ホワイト</button>
+        <button type="button" data-noise="pink">ピンク</button>
+        <button type="button" data-noise="brown">ブラウン</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>鳴らし方</h2>
+      <div class="segmented">
+        <button type="button" data-method="webaudio">方式1</button>
+        <button type="button" data-method="element">方式2（対策版）</button>
+      </div>
+      <p class="note">方式2は、音量スライダーから指を離したときに音量が変わります。</p>
+    </section>
+
+    <button type="button" id="play">再生</button>
+    <p id="status" aria-live="polite"></p>
+
+    <section>
+      <h2>音量</h2>
+      <div class="volume-row">
+        <input type="range" id="volume" min="0" max="100" value="50" aria-label="音量">
+        <span id="volume-value"></span>
+      </div>
+    </section>
+
+    <details>
+      <summary>動作ログ</summary>
+      <ol id="log"></ol>
+    </details>
+  </main>
 </body>
 </html>
