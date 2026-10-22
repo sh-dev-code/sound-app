@@ -7,8 +7,18 @@ const DEFAULTS = {
   mode: 'baby',
   theme: 'warm',
   crossfade: 3,
+  // 集中モードの「今の作業」の候補。設定画面で追加・削除できる
+  activities: [
+    { id: 'memorize', name: '暗記' },
+    { id: 'practice', name: '問題演習' },
+    { id: 'reading', name: '読書' },
+    { id: 'work', name: '仕事' },
+    { id: 'chores', name: '家事' },
+  ],
   baby: { sound: 'white', volume: 50, timer: 30 },
-  focus: { sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual', playlistId: null },
+  focus: {
+    sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual', playlistId: null, activity: null,
+  },
 };
 
 export function loadSettings() {
@@ -19,6 +29,7 @@ export function loadSettings() {
       settings.mode = saved.mode || settings.mode;
       settings.crossfade = saved.crossfade ?? settings.crossfade;
       settings.theme = saved.theme ?? settings.theme;
+      settings.activities = saved.activities ?? settings.activities;
       Object.assign(settings.baby, saved.baby);
       Object.assign(settings.focus, saved.focus);
     }

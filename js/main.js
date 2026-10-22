@@ -1,9 +1,12 @@
 import { loadLibrary, loadBuffer } from './library.js';
 import { SoundEngine } from './player.js';
 import { loadSettings, saveSettings, clearAllData, hasSeenBabyNotice, markBabyNoticeSeen } from './storage.js';
-import { loadRatings, resetRatings, statsOf, average, recordTried, recordRating, pickSound } from './ratings.js';
 import {
-  loadPlaylists, savePlaylists, totalSeconds, itemAt, startOf, indexAt, formatMinutes, SILENCE,
+  loadRatings, resetRatings, deleteActivityRatings, statsOf, average, recordTried, recordRating, moveTried,
+  pickSound, topRated,
+} from './ratings.js';
+import {
+  loadPlaylists, savePlaylists, addPlaylist, totalSeconds, itemAt, startOf, indexAt, formatMinutes, SILENCE,
 } from './playlists.js';
 import { createPlaylistEditor } from './playlist-editor.js';
 import { createSettingsView, THEMES } from './settings-view.js';
@@ -37,7 +40,11 @@ const els = {
   playMethod: $('play-method'),
   soundsSection: $('sounds-section'),
   sounds: $('sounds'),
-  omakaseNote: $('omakase-note'),
+  omakasePanel: $('omakase-panel'),
+  activityPick: $('activity-pick'),
+  ratingActivity: $('rating-activity'),
+  libraryActivity: $('library-activity'),
+  libraryMake: $('library-make'),
   playlistPanel: $('playlist-panel'),
   playlistPick: $('playlist-pick'),
   playlistSummary: $('playlist-summary'),
@@ -85,7 +92,11 @@ const state = {
   previewing: null,
   previewTimer: null,
   librarySort: 'rating',
+  // ライブラリで見ている作業（'' は全体）
+  libraryActivity: '',
+  // 評価を聞いている音と、その回を流したときの作業
   ratingFor: null,
+  ratingActivity: null,
 };
 let sounds = [];
 let categories = [];
@@ -105,6 +116,12 @@ const soundsForMode = () => sounds.filter((s) => s.modes.includes(settings.mode)
 const soundById = (id) => (id === SILENCE.id ? SILENCE : sounds.find((s) => s.id === id));
 const selectedSound = () => soundsForMode().find((s) => s.id === mode().sound) || soundsForMode()[0];
 const isOmakase = () => settings.mode === 'focus' && settings.focus.playMethod === 'omakase';
+// 選んでいる作業（削除済みなら「指定なし」）
+const currentActivity = () => {
+  const id = settings.focus.activity;
+  return settings.activities.some((a) => a.id === id) ? id : null;
+};
+const activityName = (id) => settings.activities.find((a) => a.id === id)?.name;
 const isPlaylist = () => settings.mode === 'focus' && settings.focus.playMethod === 'playlist';
 const currentPlaylist = () => playlists.find((p) => p.id === settings.focus.playlistId) || playlists[0];
 // 再生できるプレイリスト（音が 1 つ以上ある）
@@ -160,7 +177,8 @@ async function start() {
   // 再生中に編集されても影響しないよう、写しを使う
   const playlist = isPlaylist() ? structuredClone(playablePlaylist()) : null;
   if (isPlaylist() && !playlist) return;
-  const sound = omakase ? pickSound(soundsForMode(), ratings, 'focus', null)
+  const activity = currentActivity();
+  const sound = omakase ? pickSound(soundsForMode(), ratings, 'focus', null, activity)
     : playlist ? soundById(playlist.items[0].sound)
       : selectedSound();
   if (!sound) {
@@ -196,7 +214,7 @@ async function start() {
   }
   state.playing = true;
   state.startedAt = Date.now();
-  state.omakase = omakase ? { rounds: [sound.id], countedRound: -1, preparing: false } : null;
+  state.omakase = omakase ? { rounds: [sound.id], countedRound: -1, preparing: false, activity } : null;
   state.playlist = playlist ? { pl: playlist, queued: 0, preparing: false } : null;
   state.shownSoundId = null;
   state.ticker = setInterval(tick, 250);
@@ -298,9 +316,11 @@ function countFinishedRounds() {
   const { k, resting } = roundAt(elapsed());
   const finished = resting ? k : k - 1;
   if (finished <= o.countedRound) return;
-  for (let r = o.countedRound + 1; r <= finished; r++) recordTried(ratings, 'focus', soundOfRound(r).id);
+  for (let r = o.countedRound + 1; r <= finished; r++) {
+    recordTried(ratings, 'focus', soundOfRound(r).id, o.activity);
+  }
   o.countedRound = finished;
-  askRating(soundOfRound(finished));
+  askRating(soundOfRound(finished), o.activity);
 }
 
 // 集中の途中で止めたとき、5 分以上流していれば評価を聞く
@@ -309,9 +329,9 @@ function finishOmakase() {
   const o = state.omakase;
   const { k, inRound, resting } = roundAt(elapsed());
   if (!resting && inRound >= MIN_TRIED_SECONDS && k > o.countedRound) {
-    recordTried(ratings, 'focus', soundOfRound(k).id);
+    recordTried(ratings, 'focus', soundOfRound(k).id, o.activity);
     o.countedRound = k;
-    askRating(soundOfRound(k));
+    askRating(soundOfRound(k), o.activity);
   }
 }
 
@@ -327,7 +347,7 @@ async function queueNextRound() {
 
   o.preparing = true;
   const token = state.loadToken;
-  const sound = pickSound(soundsForMode(), ratings, 'focus', o.rounds[k]);
+  const sound = pickSound(soundsForMode(), ratings, 'focus', o.rounds[k], o.activity);
   let buffer;
   try {
     buffer = await loadBuffer(engine.ctx, sound);
@@ -348,15 +368,36 @@ async function queueNextRound() {
 
 // ---- ★評価 ----
 
-function askRating(sound) {
+function activityOptions(select, emptyLabel) {
+  select.replaceChildren(
+    new Option(emptyLabel, ''),
+    ...settings.activities.map((a) => new Option(a.name, a.id)),
+  );
+}
+
+// activity はその回を流したときの作業。評価のときに選び直すこともできる
+function askRating(sound, activity) {
+  if (state.ratingFor) closeRating();
   state.ratingFor = sound.id;
+  state.ratingActivity = activity;
   els.ratingTitle.textContent = `「${sound.name}」はどうでしたか？`;
+  activityOptions(els.ratingActivity, '作業：指定なし');
+  for (const o of els.ratingActivity.options) if (o.value) o.textContent = `作業：${o.textContent}`;
+  els.ratingActivity.value = activity ?? '';
   els.rating.hidden = false;
 }
 
-function closeRating() {
+// 評価を閉じる。stars があれば★を記録する
+function closeRating(stars) {
+  const chosen = els.ratingActivity.value || null;
+  moveTried(ratings, 'focus', state.ratingFor, state.ratingActivity, chosen);
+  if (stars) {
+    recordRating(ratings, 'focus', state.ratingFor, stars, chosen);
+    log(`評価: ${soundById(state.ratingFor).name} ★${stars}${chosen ? `（${activityName(chosen)}）` : ''}`);
+  }
   state.ratingFor = null;
   els.rating.hidden = true;
+  renderLibrary();
 }
 
 // ---- 試聴 ----
@@ -500,7 +541,9 @@ function render() {
     b.setAttribute('aria-pressed', b.dataset.method === settings.focus.playMethod);
   }
   els.soundsSection.hidden = isOmakase() || isPlaylist();
-  els.omakaseNote.hidden = !isOmakase();
+  els.omakasePanel.hidden = !isOmakase();
+  activityOptions(els.activityPick, '指定なし');
+  els.activityPick.value = currentActivity() ?? '';
   renderSoundChoices();
   renderPlaylistPanel();
 
@@ -549,8 +592,21 @@ function renderLibrary() {
   }
   els.libraryNote.hidden = settings.mode !== 'baby';
 
+  // 集中モードでは、作業ごとの評価に切り替えて見られる
+  const focus = settings.mode === 'focus';
+  if (!settings.activities.some((a) => a.id === state.libraryActivity)) state.libraryActivity = '';
+  els.libraryActivity.hidden = !focus;
+  els.libraryMake.hidden = !focus;
+  activityOptions(els.libraryActivity, '作業：すべて');
+  for (const o of els.libraryActivity.options) if (o.value) o.textContent = `作業：${o.textContent}`;
+  els.libraryActivity.value = state.libraryActivity;
+  const activity = focus ? state.libraryActivity || null : null;
+  els.libraryMake.textContent = activity
+    ? `「${activityName(activity)}」で評価の高い音でプレイリストを作る`
+    : '評価の高い音でプレイリストを作る';
+
   const categoryIndex = (s) => categories.findIndex((c) => c.id === s.category);
-  const rows = soundsForMode().map((s) => ({ s, stats: statsOf(ratings, settings.mode, s.id) }));
+  const rows = soundsForMode().map((s) => ({ s, stats: statsOf(ratings, settings.mode, s.id, activity) }));
   if (state.librarySort === 'rating') {
     rows.sort((a, b) => (average(b.stats) ?? -1) - (average(a.stats) ?? -1) || b.stats.tried - a.stats.tried);
   } else {
@@ -635,6 +691,18 @@ const settingsView = createSettingsView({
     saveSettings(settings);
     applyTheme();
   },
+  onAddActivity: (name) => {
+    settings.activities.push({ id: `a${Date.now().toString(36)}`, name });
+    saveSettings(settings);
+    render();
+  },
+  onRemoveActivity: (id) => {
+    settings.activities = settings.activities.filter((a) => a.id !== id);
+    if (settings.focus.activity === id) settings.focus.activity = null;
+    deleteActivityRatings(ratings, id);
+    saveSettings(settings);
+    render();
+  },
   onCrossfade: (seconds) => {
     settings.crossfade = seconds;
     saveSettings(settings);
@@ -696,10 +764,7 @@ for (let n = 1; n <= 5; n++) {
 els.ratingStars.addEventListener('click', (e) => {
   const b = e.target.closest('[data-stars]');
   if (!b || !state.ratingFor) return;
-  recordRating(ratings, 'focus', state.ratingFor, Number(b.dataset.stars));
-  log(`評価: ${soundById(state.ratingFor).name} ★${b.dataset.stars}`);
-  closeRating();
-  renderLibrary();
+  closeRating(Number(b.dataset.stars));
 });
 // 押す前に、押そうとしている★までを光らせる
 els.ratingStars.addEventListener('pointerover', (e) => {
@@ -709,7 +774,42 @@ els.ratingStars.addEventListener('pointerover', (e) => {
 els.ratingStars.addEventListener('pointerleave', () => {
   for (const b of els.ratingStars.children) b.classList.remove('lit');
 });
-els.ratingSkip.addEventListener('click', closeRating);
+els.ratingSkip.addEventListener('click', () => closeRating());
+
+els.activityPick.addEventListener('change', () => {
+  settings.focus.activity = els.activityPick.value || null;
+  saveSettings(settings);
+  // 再生中なら、次に選ぶ音と評価の記録先も新しい作業にする
+  if (state.omakase) state.omakase.activity = currentActivity();
+});
+
+els.libraryActivity.addEventListener('change', () => {
+  state.libraryActivity = els.libraryActivity.value;
+  renderLibrary();
+});
+
+// 評価の高い音を最大 4 つ、各 25 分・ループありで並べたプレイリストを作る
+const AUTO_PLAYLIST_SIZE = 4;
+const AUTO_PLAYLIST_MINUTES = 25;
+els.libraryMake.addEventListener('click', () => {
+  const activity = state.libraryActivity || null;
+  const top = topRated(soundsForMode(), ratings, 'focus', activity, AUTO_PLAYLIST_SIZE);
+  if (!top.length) {
+    alert(activity
+      ? `「${activityName(activity)}」で★評価した音がまだありません。おまかせで評価をためてください。`
+      : '★評価した音がまだありません。おまかせで評価をためてください。');
+    return;
+  }
+  const pl = addPlaylist(playlists);
+  pl.name = activity ? `${activityName(activity)}向け` : '評価の高い音';
+  pl.items = top.map((s) => ({ sound: s.id, minutes: AUTO_PLAYLIST_MINUTES }));
+  savePlaylists(playlists);
+  log(`プレイリストを作成: ${pl.name}`);
+  state.view = 'playlists';
+  playlistEditor.open(pl.id);
+  render();
+  window.scrollTo(0, 0);
+});
 
 els.librarySort.addEventListener('click', (e) => {
   const b = e.target.closest('[data-sort]');

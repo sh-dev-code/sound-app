@@ -209,5 +209,11 @@ export function createPlaylistEditor({ root, playlists, availableSounds, onChang
     document.addEventListener('touchmove', blockScroll, { passive: false });
   });
 
-  return { render };
+  // 指定したプレイリストの編集画面を開く
+  function open(id) {
+    editingId = id;
+    render();
+  }
+
+  return { render, open };
 }

@@ -18,6 +18,7 @@
 
   <div id="rating" class="rating-card" role="dialog" aria-labelledby="rating-title" hidden>
     <p id="rating-title"></p>
+    <select id="rating-activity" class="rating-activity" aria-label="この回の作業"></select>
     <div id="rating-stars" class="rating-stars"></div>
     <button type="button" id="rating-skip" class="rating-skip">スキップ</button>
   </div>
@@ -41,7 +42,11 @@
       <h2>音</h2>
       <div id="sounds"></div>
     </section>
-    <p id="omakase-note" class="notice">集中1回ごとに音が変わります。まだ試していない音を優先し、慣れてきたら★の高い音が選ばれやすくなります。集中が終わったら★で評価してください。</p>
+    <section id="omakase-panel">
+      <h2>今の作業</h2>
+      <select id="activity-pick" class="wide" aria-label="今の作業"></select>
+      <p class="note">集中1回ごとに音が変わります。この作業でまだ試していない音を優先し、慣れてきたら★の高い音が選ばれやすくなります。集中が終わったら★で評価してください。</p>
+    </section>
 
     <section id="timer-section">
       <h2>タイマー</h2>
@@ -80,8 +85,10 @@
       <button type="button" data-sort="rating">評価の高い順</button>
       <button type="button" data-sort="category">種類順</button>
     </div>
+    <select id="library-activity" class="wide" aria-label="表示する作業"></select>
     <p id="library-note" class="note">★評価は集中モードの「おまかせ」で記録されます。赤ちゃんモードでは試聴だけできます。</p>
     <ul id="library-list" class="lib-list"></ul>
+    <button type="button" id="library-make" class="primary"></button>
   </main>
 
   <main id="view-playlists" hidden></main>

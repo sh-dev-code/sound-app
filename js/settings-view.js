@@ -18,9 +18,21 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
-// onTheme(配色ID)、onCrossfade(秒)、onReset('ratings' | 'playlists' | 'all') は変更を実際に行う側の関数
-export function createSettingsView({ root, settings, fileSounds, onTheme, onCrossfade, onReset }) {
+// onTheme(配色ID)、onCrossfade(秒)、onAddActivity(名前)、onRemoveActivity(作業ID)、
+// onReset('ratings' | 'playlists' | 'all') は変更を実際に行う側の関数
+export function createSettingsView({
+  root, settings, fileSounds, onTheme, onCrossfade, onAddActivity, onRemoveActivity, onReset,
+}) {
   function render() {
+    const activities = el('ul', { className: 'activity-list' },
+      ...settings.activities.map((a) =>
+        el('li', {},
+          el('span', { textContent: a.name }),
+          el('button', { type: 'button', className: 'icon', textContent: '✕', ariaLabel: `${a.name}を削除`, dataset: { removeActivity: a.id } }),
+        ),
+      ),
+    );
+
     const themes = el('div', { className: 'themes' },
       ...THEMES.map((t) => {
         const b = el('button', { type: 'button', className: 'theme-option', dataset: { theme: t.id } },
@@ -61,6 +73,15 @@ export function createSettingsView({ root, settings, fileSounds, onTheme, onCros
         themes,
       ),
       el('section', {},
+        el('h2', { textContent: '作業の種類' }),
+        activities,
+        el('div', { className: 'pl-add' },
+          el('input', { type: 'text', id: 'activity-name', placeholder: '例：英単語', maxLength: 20, className: 'text-input' }),
+          el('button', { type: 'button', className: 'primary', textContent: '追加', dataset: { addActivity: '' } }),
+        ),
+        el('p', { className: 'note', textContent: '集中モードの「おまかせ」で今の作業を選ぶと、作業ごとに★評価が記録されます。' }),
+      ),
+      el('section', {},
         el('h2', { textContent: 'クロスフェード' }),
         crossfade,
         el('p', { className: 'note', textContent: 'プレイリストで次の音に切り替わるとき、この時間をかけて前の音を小さく・次の音を大きくします。' }),
@@ -96,7 +117,17 @@ export function createSettingsView({ root, settings, fileSounds, onTheme, onCros
   root.addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
-    if (b.dataset.theme) {
+    if (b.dataset.addActivity !== undefined) {
+      const name = root.querySelector('#activity-name').value.trim();
+      if (!name) return;
+      onAddActivity(name);
+      render();
+    } else if (b.dataset.removeActivity) {
+      const a = settings.activities.find((x) => x.id === b.dataset.removeActivity);
+      if (!confirm(`「${a.name}」を削除しますか？この作業での★評価の記録も消えます。`)) return;
+      onRemoveActivity(a.id);
+      render();
+    } else if (b.dataset.theme) {
       onTheme(b.dataset.theme);
       render();
     } else if (b.dataset.crossfade !== undefined) {
