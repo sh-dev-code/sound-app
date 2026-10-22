@@ -446,6 +446,7 @@ function renderLibrary() {
       stars.className = 'lib-stars';
       const avg = average(stats);
       stars.textContent = avg === null ? '未評価' : `★${avg.toFixed(1)}（${stats.count}件）`;
+      stars.classList.toggle('unrated', avg === null);
 
       const preview = makeButton(state.previewing === s.id ? '停止' : '試聴', { preview: s.id });
       preview.className = 'lib-preview';

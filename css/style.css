@@ -130,6 +130,8 @@ main {
 
 .lib-stars { font-size: 0.85rem; color: #f2c94c; white-space: nowrap; }
 
+.lib-stars.unrated { color: var(--muted); }
+
 .lib-preview {
   min-width: 64px;
   min-height: 40px;
