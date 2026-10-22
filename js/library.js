@@ -6,6 +6,11 @@ import { createNoise, SAMPLE_RATE, TARGET_RMS } from './noise.js';
 const EDGE_TRIM_SECONDS = 0.05;
 // 末尾と先頭をこの長さだけ重ねて、繰り返しのつなぎ目を目立たなくする
 const LOOP_FADE_SECONDS = 1.5;
+// 環境音はノイズより少し控えめの大きさにそろえる
+const FILE_TARGET_RMS = TARGET_RMS * 0.8;
+// 小さすぎる素材を大きくするのは 10 倍まで
+const MAX_BOOST = 10;
+const LIMIT = 0.95;
 
 export async function loadLibrary() {
   const res = await fetch('sounds.json');
@@ -56,7 +61,6 @@ function prepareLoop(ctx, src) {
   const out = ctx.createBuffer(src.numberOfChannels, length, rate);
 
   let sq = 0;
-  let peak = 0;
   for (let c = 0; c < src.numberOfChannels; c++) {
     const x = src.getChannelData(c).subarray(trim, trim + usable);
     const y = out.getChannelData(c);
@@ -68,15 +72,37 @@ function prepareLoop(ctx, src) {
       }
       y[i] = s;
       sq += s * s;
-      peak = Math.max(peak, Math.abs(s));
     }
   }
 
   const rms = Math.sqrt(sq / (length * src.numberOfChannels));
-  const scale = Math.min(TARGET_RMS / rms, 0.99 / peak);
-  for (let c = 0; c < out.numberOfChannels; c++) {
-    const y = out.getChannelData(c);
-    for (let i = 0; i < length; i++) y[i] *= scale;
-  }
+  const scale = Math.min(FILE_TARGET_RMS / rms, MAX_BOOST);
+  const channels = [];
+  for (let c = 0; c < out.numberOfChannels; c++) channels.push(out.getChannelData(c));
+  for (const y of channels) for (let i = 0; i < length; i++) y[i] *= scale;
+  limit(channels, rate);
   return out;
+}
+
+// 焚き火の「パチッ」のような瞬間的に大きな音は、そのまま大きくすると音が割れる。
+// 大きな音の前後だけ滑らかに音量を下げて、LIMIT を超えないようにする
+function limit(channels, rate) {
+  const length = channels[0].length;
+  const gain = new Float32Array(length);
+  for (let i = 0; i < length; i++) {
+    let a = 0;
+    for (const y of channels) a = Math.max(a, Math.abs(y[i]));
+    gain[i] = a > LIMIT ? LIMIT / a : 1;
+  }
+  // 後ろから：大きな音の少し手前から下げ始める
+  const attack = 1 - Math.exp(-1 / (0.002 * rate));
+  for (let i = length - 2; i >= 0; i--) {
+    gain[i] = Math.min(gain[i], gain[i + 1] + (1 - gain[i + 1]) * attack);
+  }
+  // 前から：大きな音のあとはゆっくり戻す
+  const release = 1 - Math.exp(-1 / (0.08 * rate));
+  for (let i = 1; i < length; i++) {
+    gain[i] = Math.min(gain[i], gain[i - 1] + (1 - gain[i - 1]) * release);
+  }
+  for (const y of channels) for (let i = 0; i < length; i++) y[i] *= gain[i];
 }
