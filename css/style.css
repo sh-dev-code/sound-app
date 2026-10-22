@@ -96,11 +96,16 @@ button { font: inherit; color: inherit; }
 
 .chips {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
 
-.chips button { background: var(--surface); padding: 0 12px; }
+.chips button {
+  min-height: 42px;
+  background: var(--surface);
+  padding: 0 4px;
+  font-size: 0.85rem;
+}
 
 .timer-row { display: flex; gap: 12px; }
 
