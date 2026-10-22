@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "sounds": [
+    { "id": "white", "name": "ホワイトノイズ", "type": "generated", "generator": "white", "modes": ["baby", "focus"], "gain": 0.8 },
+    { "id": "pink", "name": "ピンクノイズ", "type": "generated", "generator": "pink", "modes": ["focus"], "gain": 0.9 },
+    { "id": "brown", "name": "ブラウンノイズ", "type": "generated", "generator": "brown", "modes": ["focus"], "gain": 1.0 },
+    { "id": "womb", "name": "胎内音風", "type": "generated", "generator": "womb", "modes": ["baby"], "gain": 1.0 },
+    { "id": "dryer", "name": "ドライヤー風", "type": "generated", "generator": "dryer", "modes": ["baby"], "gain": 0.8 }
+  ]
+}
