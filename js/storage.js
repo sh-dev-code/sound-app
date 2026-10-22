@@ -6,7 +6,7 @@ const BABY_NOTICE_KEY = 'sound-app:baby-notice-seen';
 const DEFAULTS = {
   mode: 'baby',
   baby: { sound: 'white', volume: 50, timer: 30 },
-  focus: { sound: 'white', volume: 50, focusMin: 25, breakMin: 5 },
+  focus: { sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual' },
 };
 
 export function loadSettings() {

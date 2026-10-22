@@ -1,6 +1,7 @@
 import { loadLibrary, loadBuffer } from './library.js';
 import { SoundEngine } from './player.js';
 import { loadSettings, saveSettings, hasSeenBabyNotice, markBabyNoticeSeen } from './storage.js';
+import { loadRatings, statsOf, average, recordTried, recordRating, pickSound } from './ratings.js';
 
 // 赤ちゃんモードの音量上限は集中モードの 40%
 const MAX_GAIN = { baby: 0.4, focus: 1 };
@@ -11,12 +12,22 @@ const BABY_FADE_SECONDS = 60;
 const BABY_TIMERS = [15, 30, 60, 0];
 const FOCUS_MINUTES = [15, 20, 25, 30, 45, 50, 60, 90];
 const BREAK_MINUTES = [3, 5, 10, 15, 20];
+// これ以上流したら「試した」と数えて評価を聞く
+const MIN_TRIED_SECONDS = 5 * 60;
+const PREVIEW_SECONDS = 15;
+// 次の音の切り替え予約は、切り替えの何秒前までに済ませるか
+const QUEUE_MARGIN_SECONDS = 2;
 
 const $ = (id) => document.getElementById(id);
 const els = {
   modes: document.querySelectorAll('[data-mode]'),
+  tabs: document.querySelectorAll('[data-view]'),
+  views: { play: $('view-play'), library: $('view-library') },
   notice: $('notice'),
+  playMethod: $('play-method'),
+  soundsSection: $('sounds-section'),
   sounds: $('sounds'),
+  omakaseNote: $('omakase-note'),
   babyTimer: $('baby-timer'),
   focusTimer: $('focus-timer'),
   focusMin: $('focus-min'),
@@ -29,13 +40,36 @@ const els = {
   volumeValue: $('volume-value'),
   volumeNote: $('volume-note'),
   log: $('log'),
+  rating: $('rating'),
+  ratingTitle: $('rating-title'),
+  ratingStars: $('rating-stars'),
+  ratingSkip: $('rating-skip'),
+  libraryTitle: $('library-title'),
+  librarySort: $('library-sort'),
+  libraryNote: $('library-note'),
+  libraryList: $('library-list'),
   babyDialog: $('baby-dialog'),
   babyDialogOk: $('baby-dialog-ok'),
 };
 
 const settings = loadSettings();
-// loadToken: 読み込み中に停止や設定変更をしたら、読み込み後の再生を取りやめるための番号
-const state = { playing: false, loading: false, loadToken: 0, startedAt: 0, ticker: null };
+const ratings = loadRatings();
+const state = {
+  view: 'play',
+  playing: false,
+  loading: false,
+  // 読み込み中に停止や設定変更をしたら、読み込み後の再生を取りやめるための番号
+  loadToken: 0,
+  startedAt: 0,
+  ticker: null,
+  // おまかせ再生中の記録。rounds[k] は k 回目（0 始まり）の集中で流す音の ID
+  omakase: null,
+  shownSoundId: null,
+  previewing: null,
+  previewTimer: null,
+  librarySort: 'rating',
+  ratingFor: null,
+};
 let sounds = [];
 let categories = [];
 
@@ -51,20 +85,51 @@ const engine = new SoundEngine(log);
 
 const mode = () => settings[settings.mode];
 const soundsForMode = () => sounds.filter((s) => s.modes.includes(settings.mode));
-const currentSound = () => soundsForMode().find((s) => s.id === mode().sound) || soundsForMode()[0];
+const soundById = (id) => sounds.find((s) => s.id === id);
+const selectedSound = () => soundsForMode().find((s) => s.id === mode().sound) || soundsForMode()[0];
+const isOmakase = () => settings.mode === 'focus' && settings.focus.playMethod === 'omakase';
 // スライダー 0〜100 を、耳の感じ方に近い音量に変換する
-const gain = () => MAX_GAIN[settings.mode] * (mode().volume / 100) ** 2 * currentSound().gain;
+const volumeLevel = () => MAX_GAIN[settings.mode] * (mode().volume / 100) ** 2;
+const lowpassHz = () => (settings.mode === 'baby' ? BABY_LOWPASS_HZ : null);
 const elapsed = () => (Date.now() - state.startedAt) / 1000;
+const focusSeconds = () => settings.focus.focusMin * 60;
+const period = () => (settings.focus.focusMin + settings.focus.breakMin) * 60;
+
+// 経過時間から、何回目の集中か・休憩中かを求める
+function roundAt(e) {
+  const k = Math.floor(e / period());
+  const inRound = e - k * period();
+  return { k, inRound, resting: inRound >= focusSeconds() };
+}
+
+function soundOfRound(k) {
+  const { rounds } = state.omakase;
+  return soundById(rounds[Math.min(k, rounds.length - 1)]);
+}
+
+// 今流れている（または次に流れる）音
+function playingSound() {
+  if (state.omakase) return soundOfRound(roundAt(elapsed()).k);
+  return selectedSound();
+}
 
 function formatTime(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+function updateMediaSession(sound) {
+  if (!('mediaSession' in navigator) || state.shownSoundId === sound.id) return;
+  state.shownSoundId = sound.id;
+  navigator.mediaSession.metadata = new MediaMetadata({ title: sound.name, artist: '音で集中＆寝かしつけ' });
+}
+
 // ---- 再生・停止 ----
 
 async function start() {
-  const sound = currentSound();
+  stopPreview();
+  const omakase = isOmakase();
+  const sound = omakase ? pickSound(soundsForMode(), ratings, 'focus', null) : selectedSound();
   const ctx = engine.unlock();
   const token = ++state.loadToken;
   state.loading = true;
@@ -84,30 +149,30 @@ async function start() {
   if (token !== state.loadToken) return;
   state.loading = false;
 
-  engine.start(buffer, {
-    volume: gain(),
-    lowpassHz: settings.mode === 'baby' ? BABY_LOWPASS_HZ : null,
-  });
+  engine.start(buffer, { volume: volumeLevel(), lowpassHz: lowpassHz(), sourceGain: sound.gain });
   if (settings.mode === 'baby') {
     if (settings.baby.timer) engine.stopAfter(settings.baby.timer * 60, BABY_FADE_SECONDS);
   } else {
-    engine.schedulePomodoro(settings.focus.focusMin * 60, settings.focus.breakMin * 60);
+    engine.schedulePomodoro(focusSeconds(), settings.focus.breakMin * 60);
   }
   state.playing = true;
   state.startedAt = Date.now();
+  state.omakase = omakase ? { rounds: [sound.id], countedRound: -1, preparing: false } : null;
+  state.shownSoundId = null;
   state.ticker = setInterval(tick, 250);
-  log(`再生: ${sound.name}`);
-  if ('mediaSession' in navigator) {
-    navigator.mediaSession.metadata = new MediaMetadata({ title: sound.name, artist: '音で集中＆寝かしつけ' });
-  }
+  log(`再生: ${sound.name}${omakase ? '（おまかせ）' : ''}`);
+  updateMediaSession(sound);
+  if (omakase) queueNextRound();
   render();
 }
 
 function stop(reason = '停止') {
+  if (state.playing && state.omakase) finishOmakase();
   engine.stop();
   state.loadToken++;
   state.loading = false;
   state.playing = false;
+  state.omakase = null;
   clearInterval(state.ticker);
   log(reason);
   render();
@@ -128,7 +193,124 @@ function tick() {
     stop('タイマーで停止');
     return;
   }
+  if (state.omakase) {
+    countFinishedRounds();
+    queueNextRound();
+  }
+  if (state.playing) updateMediaSession(playingSound());
   renderTime();
+}
+
+// ---- おまかせ ----
+
+// 集中が終わった回を「試した」に数え、最後に終わった回の評価を聞く
+function countFinishedRounds() {
+  const o = state.omakase;
+  const { k, resting } = roundAt(elapsed());
+  const finished = resting ? k : k - 1;
+  if (finished <= o.countedRound) return;
+  for (let r = o.countedRound + 1; r <= finished; r++) recordTried(ratings, 'focus', soundOfRound(r).id);
+  o.countedRound = finished;
+  askRating(soundOfRound(finished));
+}
+
+// 集中の途中で止めたとき、5 分以上流していれば評価を聞く
+function finishOmakase() {
+  countFinishedRounds();
+  const o = state.omakase;
+  const { k, inRound, resting } = roundAt(elapsed());
+  if (!resting && inRound >= MIN_TRIED_SECONDS && k > o.countedRound) {
+    recordTried(ratings, 'focus', soundOfRound(k).id);
+    o.countedRound = k;
+    askRating(soundOfRound(k));
+  }
+}
+
+// 次の集中で流す音を選んで読み込み、切り替えを予約しておく。
+// 画面を消していてプログラムが止まっていても、予約した切り替えは音の側で行われる
+async function queueNextRound() {
+  const o = state.omakase;
+  if (!o || o.preparing) return;
+  const { k } = roundAt(elapsed());
+  // 予約が間に合わなかった回は、前の音がそのまま流れている
+  while (o.rounds.length <= k) o.rounds.push(o.rounds[o.rounds.length - 1]);
+  if (o.rounds.length > k + 1) return;
+
+  o.preparing = true;
+  const token = state.loadToken;
+  const sound = pickSound(soundsForMode(), ratings, 'focus', o.rounds[k]);
+  let buffer;
+  try {
+    buffer = await loadBuffer(engine.ctx, sound);
+  } catch (e) {
+    log(`読み込めませんでした: ${e.message}`);
+    o.preparing = false;
+    return;
+  }
+  if (token !== state.loadToken || state.omakase !== o) return;
+  o.preparing = false;
+
+  const offset = (k + 1) * period();
+  if (elapsed() > offset - QUEUE_MARGIN_SECONDS) return;
+  engine.queue(buffer, offset, sound.gain);
+  o.rounds.push(sound.id);
+  log(`次の音を予約: ${sound.name}`);
+}
+
+// ---- ★評価 ----
+
+function askRating(sound) {
+  state.ratingFor = sound.id;
+  els.ratingTitle.textContent = `「${sound.name}」はどうでしたか？`;
+  els.rating.hidden = false;
+}
+
+function closeRating() {
+  state.ratingFor = null;
+  els.rating.hidden = true;
+}
+
+// ---- 試聴 ----
+
+async function togglePreview(id) {
+  if (state.previewing === id) {
+    stopPreview();
+    return;
+  }
+  const sound = soundById(id);
+  const ctx = engine.unlock();
+  const token = ++state.loadToken;
+  state.previewing = id;
+  renderLibrary();
+
+  let buffer;
+  try {
+    buffer = await loadBuffer(ctx, sound);
+  } catch (e) {
+    log(`読み込めませんでした: ${e.message}`);
+    if (state.previewing === id) state.previewing = null;
+    renderLibrary();
+    return;
+  }
+  if (token !== state.loadToken || state.previewing !== id) return;
+
+  engine.start(buffer, { volume: volumeLevel(), lowpassHz: lowpassHz(), sourceGain: sound.gain });
+  engine.stopAfter(PREVIEW_SECONDS, 2);
+  clearTimeout(state.previewTimer);
+  state.previewTimer = setTimeout(() => {
+    if (state.previewing !== id) return;
+    state.previewing = null;
+    renderLibrary();
+  }, PREVIEW_SECONDS * 1000);
+}
+
+function stopPreview() {
+  if (!state.previewing) return;
+  engine.stop();
+  state.loadToken++;
+  state.previewing = null;
+  clearTimeout(state.previewTimer);
+  renderLibrary();
 }
 
 // ---- 表示 ----
@@ -145,36 +327,33 @@ function renderTime() {
       phase = 'タイマーなし';
       time = state.playing ? formatTime(elapsed()) : '--:--';
     }
+  } else if (!state.playing) {
+    phase = '集中';
+    time = formatTime(focusSeconds());
   } else {
-    const focus = settings.focus.focusMin * 60;
-    const rest = settings.focus.breakMin * 60;
-    if (!state.playing) {
-      phase = '集中';
-      time = formatTime(focus);
-    } else {
-      const e = elapsed();
-      const round = Math.floor(e / (focus + rest));
-      const inRound = e - round * (focus + rest);
-      if (inRound < focus) {
-        phase = `集中中（${round + 1}回目）`;
-        time = formatTime(focus - inRound);
-      } else {
-        phase = '休憩中';
-        time = formatTime(focus + rest - inRound);
-      }
-    }
+    const { k, inRound, resting } = roundAt(elapsed());
+    phase = resting ? '休憩中' : `集中中（${k + 1}回目）`;
+    time = formatTime((resting ? period() : focusSeconds()) - inRound);
   }
   els.phase.textContent = phase;
   els.time.textContent = time;
+
+  if (state.playing) els.nowPlaying.textContent = playingSound().name;
+  else if (isOmakase()) els.nowPlaying.textContent = 'おまかせ（音は自動で選びます）';
+  else els.nowPlaying.textContent = selectedSound()?.name ?? '';
 }
 
-function render() {
-  document.body.dataset.mode = settings.mode;
-  for (const b of els.modes) b.setAttribute('aria-pressed', b.dataset.mode === settings.mode);
-  els.notice.hidden = settings.mode !== 'baby';
+function makeButton(text, data) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.textContent = text;
+  Object.assign(b.dataset, data);
+  return b;
+}
 
-  // 音を種類ごとに見出しを付けて並べる
-  const selected = currentSound();
+// 音を種類ごとに見出しを付けて並べる
+function renderSoundChoices() {
+  const selected = selectedSound();
   const available = soundsForMode();
   els.sounds.replaceChildren(
     ...categories
@@ -187,20 +366,31 @@ function render() {
         heading.textContent = cat.name;
         const chips = document.createElement('div');
         chips.className = 'chips';
-        chips.append(
-          ...list.map((s) => {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.dataset.sound = s.id;
-            b.textContent = s.name;
-            b.setAttribute('aria-pressed', s === selected);
-            return b;
-          }),
-        );
+        for (const s of list) {
+          const b = makeButton(s.name, { sound: s.id });
+          b.setAttribute('aria-pressed', s === selected);
+          chips.append(b);
+        }
         group.append(heading, chips);
         return group;
       }),
   );
+}
+
+function render() {
+  document.body.dataset.mode = settings.mode;
+  for (const b of els.modes) b.setAttribute('aria-pressed', b.dataset.mode === settings.mode);
+  for (const b of els.tabs) b.setAttribute('aria-pressed', b.dataset.view === state.view);
+  for (const [name, view] of Object.entries(els.views)) view.hidden = name !== state.view;
+  els.notice.hidden = settings.mode !== 'baby';
+
+  els.playMethod.hidden = settings.mode !== 'focus';
+  for (const b of els.playMethod.querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', b.dataset.method === settings.focus.playMethod);
+  }
+  els.soundsSection.hidden = isOmakase();
+  els.omakaseNote.hidden = !isOmakase();
+  renderSoundChoices();
 
   els.babyTimer.hidden = settings.mode !== 'baby';
   els.focusTimer.hidden = settings.mode !== 'focus';
@@ -212,13 +402,58 @@ function render() {
 
   els.play.textContent = state.loading ? '読み込み中' : state.playing ? '停止' : '再生';
   els.play.classList.toggle('playing', state.playing || state.loading);
-  els.nowPlaying.textContent = selected ? selected.name : '';
 
   els.volume.value = mode().volume;
   els.volumeValue.textContent = mode().volume;
   els.volumeNote.hidden = settings.mode !== 'baby';
 
   renderTime();
+  renderLibrary();
+}
+
+function renderLibrary() {
+  els.libraryTitle.textContent = `音ライブラリ（${settings.mode === 'baby' ? '赤ちゃん' : '集中'}モード）`;
+  for (const b of els.librarySort.querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', b.dataset.sort === state.librarySort);
+  }
+  els.libraryNote.hidden = settings.mode !== 'baby';
+
+  const categoryIndex = (s) => categories.findIndex((c) => c.id === s.category);
+  const rows = soundsForMode().map((s) => ({ s, stats: statsOf(ratings, settings.mode, s.id) }));
+  if (state.librarySort === 'rating') {
+    rows.sort((a, b) => (average(b.stats) ?? -1) - (average(a.stats) ?? -1) || b.stats.tried - a.stats.tried);
+  } else {
+    rows.sort((a, b) => categoryIndex(a.s) - categoryIndex(b.s));
+  }
+
+  const busy = state.playing || state.loading;
+  els.libraryList.replaceChildren(
+    ...rows.map(({ s, stats }) => {
+      const li = document.createElement('li');
+      li.className = 'lib-row';
+      const info = document.createElement('div');
+      info.className = 'lib-info';
+      const name = document.createElement('span');
+      name.className = 'lib-name';
+      name.textContent = s.name;
+      const meta = document.createElement('span');
+      meta.className = 'lib-meta';
+      const category = categories.find((c) => c.id === s.category)?.name ?? '';
+      meta.textContent = `${category}・試した回数 ${stats.tried}回`;
+      info.append(name, meta);
+
+      const stars = document.createElement('span');
+      stars.className = 'lib-stars';
+      const avg = average(stats);
+      stars.textContent = avg === null ? '未評価' : `★${avg.toFixed(1)}（${stats.count}件）`;
+
+      const preview = makeButton(state.previewing === s.id ? '停止' : '試聴', { preview: s.id });
+      preview.className = 'lib-preview';
+      preview.disabled = busy;
+      li.append(info, stars, preview);
+      return li;
+    }),
+  );
 }
 
 function showBabyNoticeIfFirstTime() {
@@ -230,12 +465,27 @@ function showBabyNoticeIfFirstTime() {
 for (const b of els.modes) {
   b.addEventListener('click', () => {
     if (b.dataset.mode === settings.mode) return;
-    if (state.playing) stop('モード切替');
+    if (state.playing || state.loading) stop('モード切替');
+    stopPreview();
     settings.mode = b.dataset.mode;
     saveSettings(settings);
     render();
     showBabyNoticeIfFirstTime();
   });
+}
+
+for (const b of els.tabs) {
+  b.addEventListener('click', () => {
+    if (state.view === b.dataset.view) return;
+    stopPreview();
+    state.view = b.dataset.view;
+    render();
+    window.scrollTo(0, 0);
+  });
+}
+
+for (const b of els.playMethod.querySelectorAll('button')) {
+  b.addEventListener('click', () => change(() => { settings.focus.playMethod = b.dataset.method; }));
 }
 
 els.sounds.addEventListener('click', (e) => {
@@ -244,10 +494,7 @@ els.sounds.addEventListener('click', (e) => {
 });
 
 for (const minutes of BABY_TIMERS) {
-  const b = document.createElement('button');
-  b.type = 'button';
-  b.dataset.minutes = minutes;
-  b.textContent = minutes ? `${minutes}分` : 'なし';
+  const b = makeButton(minutes ? `${minutes}分` : 'なし', { minutes });
   b.addEventListener('click', () => change(() => { settings.baby.timer = minutes; }));
   els.babyTimer.append(b);
 }
@@ -263,9 +510,44 @@ els.play.addEventListener('click', () => (state.playing || state.loading ? stop(
 els.volume.addEventListener('input', () => {
   mode().volume = Number(els.volume.value);
   els.volumeValue.textContent = els.volume.value;
-  if (state.playing) engine.setVolume(gain());
+  if (state.playing) engine.setVolume(volumeLevel());
 });
 els.volume.addEventListener('change', () => saveSettings(settings));
+
+for (let n = 1; n <= 5; n++) {
+  const b = makeButton('★', { stars: n });
+  b.setAttribute('aria-label', `★${n}`);
+  els.ratingStars.append(b);
+}
+els.ratingStars.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-stars]');
+  if (!b || !state.ratingFor) return;
+  recordRating(ratings, 'focus', state.ratingFor, Number(b.dataset.stars));
+  log(`評価: ${soundById(state.ratingFor).name} ★${b.dataset.stars}`);
+  closeRating();
+  renderLibrary();
+});
+// 押す前に、押そうとしている★までを光らせる
+els.ratingStars.addEventListener('pointerover', (e) => {
+  const n = Number(e.target.closest('[data-stars]')?.dataset.stars ?? 0);
+  for (const b of els.ratingStars.children) b.classList.toggle('lit', Number(b.dataset.stars) <= n);
+});
+els.ratingStars.addEventListener('pointerleave', () => {
+  for (const b of els.ratingStars.children) b.classList.remove('lit');
+});
+els.ratingSkip.addEventListener('click', closeRating);
+
+els.librarySort.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sort]');
+  if (!b) return;
+  state.librarySort = b.dataset.sort;
+  renderLibrary();
+});
+
+els.libraryList.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-preview]');
+  if (b) togglePreview(b.dataset.preview);
+});
 
 els.babyDialogOk.addEventListener('click', () => {
   markBabyNoticeSeen();

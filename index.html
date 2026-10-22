@@ -9,18 +9,32 @@
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
-  <main>
+  <header class="top">
     <nav class="segmented mode-switch" aria-label="モード">
       <button type="button" data-mode="baby">赤ちゃん</button>
       <button type="button" data-mode="focus">集中</button>
     </nav>
+  </header>
 
+  <div id="rating" class="rating-card" role="dialog" aria-labelledby="rating-title" hidden>
+    <p id="rating-title"></p>
+    <div id="rating-stars" class="rating-stars"></div>
+    <button type="button" id="rating-skip" class="rating-skip">スキップ</button>
+  </div>
+
+  <main id="view-play">
     <p id="notice" class="notice">音量は小さめに、スマホは赤ちゃんの耳元から離して置いてください。</p>
 
-    <section>
+    <div id="play-method" class="segmented">
+      <button type="button" data-method="manual">選んで再生</button>
+      <button type="button" data-method="omakase">おまかせ</button>
+    </div>
+
+    <section id="sounds-section">
       <h2>音</h2>
-      <div id="sounds" class="chips"></div>
+      <div id="sounds"></div>
     </section>
+    <p id="omakase-note" class="notice">集中1回ごとに音が変わります。まだ試していない音を優先し、慣れてきたら★の高い音が選ばれやすくなります。集中が終わったら★で評価してください。</p>
 
     <section>
       <h2>タイマー</h2>
@@ -52,6 +66,21 @@
       <ol id="log"></ol>
     </details>
   </main>
+
+  <main id="view-library" hidden>
+    <h1 id="library-title" class="view-title"></h1>
+    <div id="library-sort" class="segmented">
+      <button type="button" data-sort="rating">評価の高い順</button>
+      <button type="button" data-sort="category">種類順</button>
+    </div>
+    <p id="library-note" class="note">★評価は集中モードの「おまかせ」で記録されます。赤ちゃんモードでは試聴だけできます。</p>
+    <ul id="library-list" class="lib-list"></ul>
+  </main>
+
+  <nav class="tabbar" aria-label="画面">
+    <button type="button" data-view="play">再生</button>
+    <button type="button" data-view="library">ライブラリ</button>
+  </nav>
 
   <dialog id="baby-dialog">
     <h2>赤ちゃんモードを使う前に</h2>

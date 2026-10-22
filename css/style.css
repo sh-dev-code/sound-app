@@ -28,14 +28,118 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+.top {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: calc(env(safe-area-inset-top) + 16px) 16px 0;
+}
+
 main {
   max-width: 480px;
   margin: 0 auto;
-  padding: calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 24px);
+  /* 下は画面下のタブの高さぶん空ける */
+  padding: 22px 16px calc(env(safe-area-inset-bottom) + 96px);
   display: flex;
   flex-direction: column;
   gap: 22px;
 }
+
+.view-title { font-size: 1.05rem; margin: 0; }
+
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--surface);
+  border-top: 1px solid var(--surface-2);
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 10;
+}
+
+.tabbar button {
+  min-height: 56px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.tabbar button[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
+
+.rating-card {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(448px, calc(100vw - 32px));
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  padding: 14px 16px 10px;
+  text-align: center;
+  z-index: 20;
+}
+
+.rating-card p { margin: 0 0 6px; font-size: 0.95rem; }
+
+.rating-stars { display: flex; justify-content: center; gap: 4px; }
+
+.rating-stars button {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.rating-stars button.lit,
+.rating-stars button:active { color: #f2c94c; }
+
+.rating-skip {
+  margin-top: 2px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.lib-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+
+.lib-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 10px 10px 10px 14px;
+}
+
+.lib-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+.lib-name { font-weight: 600; }
+
+.lib-meta { font-size: 0.75rem; color: var(--muted); }
+
+.lib-stars { font-size: 0.85rem; color: #f2c94c; white-space: nowrap; }
+
+.lib-preview {
+  min-width: 64px;
+  min-height: 40px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--surface-2);
+  font-size: 0.85rem;
+}
+
+.lib-preview:disabled { opacity: 0.4; }
 
 h2 {
   font-size: 0.85rem;

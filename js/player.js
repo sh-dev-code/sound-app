@@ -24,7 +24,7 @@ function safeStop(node, at) {
 }
 
 // 本番の鳴らし方（方式1：Web Audio API）
-//   音 → envelope（タイマーによる増減）→ [高音カット] → master（音量）→ スピーカー
+//   音 → 音ごとの補正 → envelope（タイマーによる増減）→ [高音カット] → master（音量）→ スピーカー
 //   合図音 → master
 export class SoundEngine {
   constructor(log) {
@@ -45,7 +45,7 @@ export class SoundEngine {
     return this.ctx;
   }
 
-  start(buffer, { volume, lowpassHz }) {
+  start(buffer, { volume, lowpassHz, sourceGain = 1 }) {
     this.unlock();
     this.stop();
 
@@ -69,13 +69,26 @@ export class SoundEngine {
       envelope.connect(master);
     }
 
-    const source = ctx.createBufferSource();
+    this.session = { envelope, master, startTime: t, current: null, sources: [] };
+    this.queue(buffer, 0, sourceGain);
+  }
+
+  // 再生開始から offset 秒の時点で、今の音から buffer の音へ切り替える
+  queue(buffer, offset, sourceGain = 1) {
+    const s = this.session;
+    if (!s) return;
+    const at = s.startTime + offset;
+    const gain = this.ctx.createGain();
+    gain.gain.value = sourceGain;
+    gain.connect(s.envelope);
+    const source = this.ctx.createBufferSource();
     source.buffer = buffer;
     source.loop = true;
-    source.connect(envelope);
-    source.start(t);
-
-    this.session = { source, envelope, master, startTime: t };
+    source.connect(gain);
+    source.start(at);
+    if (s.current) safeStop(s.current, at);
+    s.current = source;
+    s.sources.push(source);
   }
 
   // 再生開始から seconds 秒後に止まるよう、最後の fadeSeconds 秒で小さくしていく
@@ -86,7 +99,7 @@ export class SoundEngine {
     const from = Math.max(end - fadeSeconds, s.startTime + FADE_SECONDS);
     s.envelope.gain.setValueAtTime(1, from);
     s.envelope.gain.linearRampToValueAtTime(0, end);
-    safeStop(s.source, end + 0.1);
+    safeStop(s.current, end + 0.1);
   }
 
   // 集中 focusSeconds 秒 → 休憩 restSeconds 秒 を繰り返す。休憩中は音を消し、切り替わりで合図音
@@ -135,8 +148,8 @@ export class SoundEngine {
     const t = this.ctx.currentTime;
     s.master.gain.cancelScheduledValues(t);
     s.master.gain.setTargetAtTime(0, t, 0.08);
-    safeStop(s.source, t + 0.5);
-    // 予約済みの合図音も master ごと切り離して鳴らないようにする
+    for (const source of s.sources) safeStop(source, t + 0.5);
+    // 予約済みの音や合図音も master ごと切り離して鳴らないようにする
     setTimeout(() => s.master.disconnect(), 600);
   }
 
