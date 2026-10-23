@@ -50,7 +50,9 @@ export class SoundEngine {
     return this.ctx;
   }
 
-  start(buffer, { volume, lowpassHz, sourceGain = 1 }) {
+  // offset: 一時停止から再開するときの、再生開始からの経過秒数（タイマーの予約はこの続きから行う）
+  // silent: 再開した時点がポモドーロの休憩中で、音を出さずに始めるとき
+  start(buffer, { volume, lowpassHz, sourceGain = 1, offset = 0, silent = false }) {
     this.unlock();
     this.stop();
 
@@ -63,7 +65,7 @@ export class SoundEngine {
 
     const envelope = ctx.createGain();
     envelope.gain.setValueAtTime(0, t);
-    envelope.gain.linearRampToValueAtTime(1, t + FADE_SECONDS);
+    if (!silent) envelope.gain.linearRampToValueAtTime(1, t + FADE_SECONDS);
 
     if (lowpassHz) {
       const filter = ctx.createBiquadFilter();
@@ -74,8 +76,9 @@ export class SoundEngine {
       envelope.connect(master);
     }
 
-    this.session = { envelope, master, startTime: t, current: null, sources: [] };
-    this.queue(buffer, 0, sourceGain);
+    // startTime は「再生開始」の時刻。再開のときは、経過時間ぶん過去の時刻になる
+    this.session = { envelope, master, startTime: t - offset, resumedAt: t, current: null, sources: [] };
+    this.queue(buffer, offset, sourceGain);
   }
 
   // 再生開始から offset 秒の時点で、今の音から buffer の音へ切り替える。
@@ -114,27 +117,35 @@ export class SoundEngine {
     const s = this.session;
     if (!s) return;
     const end = s.startTime + seconds;
-    const from = Math.max(end - fadeSeconds, s.startTime + FADE_SECONDS);
+    if (end <= s.resumedAt) return;
+    const from = Math.min(Math.max(end - fadeSeconds, s.resumedAt + FADE_SECONDS), end);
     s.envelope.gain.setValueAtTime(1, from);
     s.envelope.gain.linearRampToValueAtTime(0, end);
     safeStop(s.current, end + 0.1);
   }
 
-  // 集中 focusSeconds 秒 → 休憩 restSeconds 秒 を繰り返す。休憩中は音を消し、切り替わりで合図音
+  // 集中 focusSeconds 秒 → 休憩 restSeconds 秒 を繰り返す。休憩中は音を消し、切り替わりで合図音。
+  // 再開のときは、再開した時点より後の切り替わりだけを予約する
   schedulePomodoro(focusSeconds, restSeconds) {
     const s = this.session;
     if (!s) return;
     const g = s.envelope.gain;
+    const now = s.resumedAt;
     const period = focusSeconds + restSeconds;
-    for (let k = 0; k < POMODORO_CYCLES; k++) {
+    const first = Math.max(0, Math.floor((now - s.startTime) / period));
+    for (let k = first; k < first + POMODORO_CYCLES; k++) {
       const focusEnd = s.startTime + k * period + focusSeconds;
       const restEnd = focusEnd + restSeconds;
-      g.setValueAtTime(1, focusEnd - PHASE_FADE_SECONDS);
-      g.linearRampToValueAtTime(0, focusEnd);
-      g.setValueAtTime(0, restEnd);
-      g.linearRampToValueAtTime(1, restEnd + PHASE_FADE_SECONDS);
-      this.chime(focusEnd);
-      this.chime(restEnd);
+      if (focusEnd > now) {
+        g.setValueAtTime(1, Math.min(Math.max(focusEnd - PHASE_FADE_SECONDS, now + FADE_SECONDS), focusEnd));
+        g.linearRampToValueAtTime(0, focusEnd);
+        this.chime(focusEnd);
+      }
+      if (restEnd > now) {
+        g.setValueAtTime(0, restEnd);
+        g.linearRampToValueAtTime(1, restEnd + PHASE_FADE_SECONDS);
+        this.chime(restEnd);
+      }
     }
   }
 

@@ -56,6 +56,7 @@ const els = {
   phase: $('phase'),
   time: $('time'),
   play: $('play'),
+  reset: $('reset'),
   nowPlaying: $('now-playing'),
   volume: $('volume'),
   volumeValue: $('volume-value'),
@@ -79,6 +80,9 @@ const playlists = loadPlaylists();
 const state = {
   view: 'play',
   playing: false,
+  // 一時停止中か。pausedElapsed は止めた時点の経過秒数
+  paused: false,
+  pausedElapsed: 0,
   loading: false,
   // 読み込み中に停止や設定変更をしたら、読み込み後の再生を取りやめるための番号
   loadToken: 0,
@@ -109,10 +113,10 @@ function log(message) {
   while (els.log.children.length > 50) els.log.lastChild.remove();
 }
 
-// ロック画面の停止ボタンなどで iPhone 側に音を止められたら、アプリも停止扱いにしてタイマーを止める
+// ロック画面の停止ボタンなどで iPhone 側に音を止められたら、アプリも一時停止にしてタイマーを止める
 const engine = new SoundEngine(log, {
   onInterrupted: () => {
-    if (state.playing) stop('ロック画面などから停止されました');
+    if (state.playing) pause('ロック画面などから一時停止されました');
     else if (state.previewing) stopPreview();
   },
 });
@@ -138,7 +142,10 @@ const playablePlaylist = () => {
 // スライダー 0〜100 を、耳の感じ方に近い音量に変換する
 const volumeLevel = () => MAX_GAIN[settings.mode] * (mode().volume / 100) ** 2;
 const lowpassHz = () => (settings.mode === 'baby' ? BABY_LOWPASS_HZ : null);
-const elapsed = () => (Date.now() - state.startedAt) / 1000;
+// 再生開始からの経過秒数（一時停止中は止めた時点のまま）
+const elapsed = () => (state.paused ? state.pausedElapsed : (Date.now() - state.startedAt) / 1000);
+// 再生中か一時停止中（タイマーが途中の状態）
+const running = () => state.playing || state.paused;
 const focusSeconds = () => settings.focus.focusMin * 60;
 const period = () => (settings.focus.focusMin + settings.focus.breakMin) * 60;
 
@@ -177,20 +184,57 @@ function updateMediaSession(sound) {
 
 // ---- 再生・停止 ----
 
-async function start() {
+// 最初から再生する
+function start() {
   stopPreview();
-  const omakase = isOmakase();
-  // 再生中に編集されても影響しないよう、写しを使う
   const playlist = isPlaylist() ? structuredClone(playablePlaylist()) : null;
   if (isPlaylist() && !playlist) return;
-  const activity = currentActivity();
-  const sound = omakase ? pickSound(soundsForMode(), ratings, 'focus', null, activity)
-    : playlist ? soundById(playlist.items[0].sound)
-      : selectedSound();
+  if (isOmakase()) {
+    const activity = currentActivity();
+    const first = pickSound(soundsForMode(), ratings, 'focus', null, activity);
+    state.omakase = { rounds: [first.id], countedRound: -1, preparing: false, activity };
+  } else {
+    state.omakase = null;
+  }
+  // 再生中に編集されても影響しないよう、写しを使う
+  state.playlist = playlist ? { pl: playlist, queued: 0, preparing: false } : null;
+  log(`再生: ${playlist ? `プレイリスト「${playlist.name}」` : state.omakase ? 'おまかせ' : selectedSound().name}`);
+  playFrom(0);
+}
+
+// 一時停止したところから続きを流す
+function resume() {
+  log('再開');
+  playFrom(state.pausedElapsed);
+}
+
+// 再生開始から offset 秒の時点の音を鳴らし、タイマー・音の切り替えをその続きから予約する
+async function playFrom(offset) {
+  let sound;
+  let silent = false;
+  if (state.omakase) {
+    const o = state.omakase;
+    const { k, resting } = roundAt(offset);
+    while (o.rounds.length <= k) o.rounds.push(o.rounds[o.rounds.length - 1]);
+    // 一時停止で、予約していた次の回の音は取り消されている
+    o.rounds.length = k + 1;
+    o.preparing = false;
+    sound = soundOfRound(k);
+    silent = resting;
+  } else if (state.playlist) {
+    const p = state.playlist;
+    p.queued = indexAt(p.pl, offset);
+    p.preparing = false;
+    sound = soundById(itemAt(p.pl, p.queued).sound);
+  } else {
+    sound = selectedSound();
+    if (settings.mode === 'focus') silent = roundAt(offset).resting;
+  }
   if (!sound) {
     log('プレイリストに見つからない音があります');
     return;
   }
+
   const ctx = engine.unlock();
   const token = ++state.loadToken;
   state.loading = true;
@@ -209,42 +253,57 @@ async function start() {
   }
   if (token !== state.loadToken) return;
   state.loading = false;
+  state.paused = false;
 
-  engine.start(buffer, { volume: volumeLevel(), lowpassHz: lowpassHz(), sourceGain: sound.gain });
+  engine.start(buffer, { volume: volumeLevel(), lowpassHz: lowpassHz(), sourceGain: sound.gain, offset, silent });
   if (settings.mode === 'baby') {
     if (settings.baby.timer) engine.stopAfter(settings.baby.timer * 60, BABY_FADE_SECONDS);
-  } else if (playlist) {
-    if (!playlist.loop && playlist.items.length === 1) engine.stopAfter(totalSeconds(playlist), endFade());
+  } else if (state.playlist) {
+    const { pl, queued } = state.playlist;
+    if (!pl.loop && queued === pl.items.length - 1) engine.stopAfter(totalSeconds(pl), endFade());
   } else {
     engine.schedulePomodoro(focusSeconds(), settings.focus.breakMin * 60);
   }
   state.playing = true;
-  state.startedAt = Date.now();
-  state.omakase = omakase ? { rounds: [sound.id], countedRound: -1, preparing: false, activity } : null;
-  state.playlist = playlist ? { pl: playlist, queued: 0, preparing: false } : null;
+  state.startedAt = Date.now() - offset * 1000;
   state.shownSoundId = null;
   state.ticker = setInterval(tick, 250);
-  log(`再生: ${playlist ? `プレイリスト「${playlist.name}」` : sound.name}${omakase ? '（おまかせ）' : ''}`);
   updateMediaSession(sound);
   setPlaybackState('playing');
-  if (omakase) queueNextRound();
-  if (playlist) queuePlaylistNext();
+  if (state.omakase) queueNextRound();
+  if (state.playlist) queuePlaylistNext();
   render();
 }
 
 // プレイリストを最後まで流して止まるときの、小さくしていく時間
 const endFade = () => Math.max(settings.crossfade, 3);
 
+// 一時停止。経過時間を覚えておき、再開で続きから流す
+function pause(reason = '一時停止') {
+  if (!state.playing) return;
+  state.pausedElapsed = elapsed();
+  engine.stop();
+  state.loadToken++;
+  state.playing = false;
+  state.paused = true;
+  clearInterval(state.ticker);
+  setPlaybackState('paused');
+  log(reason);
+  render();
+}
+
+// 停止してタイマーを最初に戻す（リセット）
 function stop(reason = '停止') {
-  if (state.playing && state.omakase) finishOmakase();
+  if ((state.playing || state.paused) && state.omakase) finishOmakase();
   engine.stop();
   state.loadToken++;
   state.loading = false;
   state.playing = false;
+  state.paused = false;
   state.omakase = null;
   state.playlist = null;
   clearInterval(state.ticker);
-  setPlaybackState('paused');
+  setPlaybackState('none');
   log(reason);
   render();
 }
@@ -255,9 +314,10 @@ function setPlaybackState(value) {
 }
 
 // 再生中に音やタイマーを変えたら、新しい設定で最初から鳴らし直す
+// 一時停止中に変えたら、リセットして止まったままにする
 function change(update) {
   const wasPlaying = state.playing || state.loading;
-  if (wasPlaying) stop('設定を変更');
+  if (wasPlaying || state.paused) stop(wasPlaying ? '設定を変更' : 'リセット（設定を変更）');
   update();
   saveSettings(settings);
   if (wasPlaying) start();
@@ -465,17 +525,17 @@ function renderTime() {
     const total = settings.baby.timer * 60;
     if (total) {
       phase = '残り';
-      time = formatTime(state.playing ? total - elapsed() : total);
+      time = formatTime(running() ? total - elapsed() : total);
     } else {
       phase = 'タイマーなし';
-      time = state.playing ? formatTime(elapsed()) : '--:--';
+      time = running() ? formatTime(elapsed()) : '--:--';
     }
   } else if (isPlaylist()) {
     const pl = state.playlist?.pl ?? playablePlaylist();
     if (!pl) {
       phase = 'プレイリスト';
       time = '--:--';
-    } else if (!state.playing) {
+    } else if (!running()) {
       phase = pl.loop ? `「${pl.name}」・ループ` : `「${pl.name}」`;
       time = formatTime(totalSeconds(pl));
     } else {
@@ -483,7 +543,7 @@ function renderTime() {
       phase = `「${pl.name}」${(g % pl.items.length) + 1}/${pl.items.length}曲目`;
       time = formatTime(startOf(pl, g + 1) - elapsed());
     }
-  } else if (!state.playing) {
+  } else if (!running()) {
     phase = '集中';
     time = formatTime(focusSeconds());
   } else {
@@ -491,10 +551,10 @@ function renderTime() {
     phase = resting ? '休憩モード' : `集中モード（${k + 1}回目）`;
     time = formatTime((resting ? period() : focusSeconds()) - inRound);
   }
-  els.phase.textContent = phase;
+  els.phase.textContent = state.paused ? `一時停止中・${phase}` : phase;
   els.time.textContent = time;
 
-  if (state.playing) els.nowPlaying.textContent = playingSound().name;
+  if (running()) els.nowPlaying.textContent = playingSound().name;
   else if (isOmakase()) els.nowPlaying.textContent = 'おまかせ（音は自動で選びます）';
   else if (isPlaylist()) els.nowPlaying.textContent = '';
   else els.nowPlaying.textContent = selectedSound()?.name ?? '';
@@ -569,9 +629,10 @@ function render() {
   els.focusMin.value = settings.focus.focusMin;
   els.breakMin.value = settings.focus.breakMin;
 
-  els.play.textContent = state.loading ? '読み込み中' : state.playing ? '停止' : '再生';
+  els.play.textContent = state.loading ? '読み込み中' : state.playing ? '一時停止' : state.paused ? '再開' : '再生';
   els.play.classList.toggle('playing', state.playing || state.loading);
-  els.play.disabled = !sounds.length || (isPlaylist() && !state.playing && !state.loading && !playablePlaylist());
+  els.reset.hidden = !state.paused;
+  els.play.disabled = !sounds.length || (isPlaylist() && !running() && !state.loading && !playablePlaylist());
 
   els.volume.value = mode().volume;
   els.volumeValue.textContent = mode().volume;
@@ -626,7 +687,7 @@ function renderLibrary() {
     rows.sort((a, b) => categoryIndex(a.s) - categoryIndex(b.s));
   }
 
-  const busy = state.playing || state.loading;
+  const busy = running() || state.loading;
   els.libraryList.replaceChildren(
     ...rows.map(({ s, stats }) => {
       const li = document.createElement('li');
@@ -666,7 +727,7 @@ function showBabyNoticeIfFirstTime() {
 for (const b of els.modes) {
   b.addEventListener('click', () => {
     if (b.dataset.mode === settings.mode) return;
-    if (state.playing || state.loading) stop('モード切替');
+    if (running() || state.loading) stop('モード切替');
     stopPreview();
     settings.mode = b.dataset.mode;
     saveSettings(settings);
@@ -721,7 +782,7 @@ const settingsView = createSettingsView({
     saveSettings(settings);
   },
   onReset: (what) => {
-    if (state.playing || state.loading) stop('データのリセット');
+    if (running() || state.loading) stop('データのリセット');
     if (what === 'ratings') {
       resetRatings(ratings);
     } else if (what === 'playlists') {
@@ -760,7 +821,14 @@ for (const [select, choices] of [[els.focusMin, FOCUS_MINUTES], [els.breakMin, B
 els.focusMin.addEventListener('change', () => change(() => { settings.focus.focusMin = Number(els.focusMin.value); }));
 els.breakMin.addEventListener('change', () => change(() => { settings.focus.breakMin = Number(els.breakMin.value); }));
 
-els.play.addEventListener('click', () => (state.playing || state.loading ? stop() : start()));
+// 再生中は一時停止、一時停止中は再開。読み込み中に押したら取りやめる
+els.play.addEventListener('click', () => {
+  if (state.loading) stop('取りやめ');
+  else if (state.playing) pause();
+  else if (state.paused) resume();
+  else start();
+});
+els.reset.addEventListener('click', () => stop('リセット'));
 
 els.volume.addEventListener('input', () => {
   mode().volume = Number(els.volume.value);
@@ -842,8 +910,11 @@ els.babyDialogOk.addEventListener('click', () => {
 });
 
 if ('mediaSession' in navigator) {
-  navigator.mediaSession.setActionHandler('play', () => { if (!state.playing && !state.loading) start(); });
-  navigator.mediaSession.setActionHandler('pause', () => { if (state.playing) stop(); });
+  navigator.mediaSession.setActionHandler('play', () => {
+    if (state.paused && !state.loading) resume();
+    else if (!state.playing && !state.loading) start();
+  });
+  navigator.mediaSession.setActionHandler('pause', () => { if (state.playing) pause(); });
 }
 
 document.addEventListener('visibilitychange', () => {
