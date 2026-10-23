@@ -88,21 +88,32 @@ main {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
+  gap: 6px;
   background: var(--surface);
   border-top: 1px solid var(--surface-2);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding: 8px 10px calc(env(safe-area-inset-bottom) + 8px);
   z-index: 10;
 }
 
+/* タブは 1 つずつ角の丸い四角で囲み、境目を分かりやすくする */
 .tabbar button {
-  min-height: 56px;
-  border: 0;
-  background: transparent;
+  min-height: 46px;
+  padding: 0 2px;
+  border: 1px solid var(--surface-2);
+  border-radius: 12px;
+  background: var(--bg);
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
 }
 
-.tabbar button[aria-pressed="true"] { color: var(--accent); font-weight: 600; }
+/* 今いる画面のタブはアクセント色で塗る */
+.tabbar button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
 
 .rating-card {
   position: fixed;
