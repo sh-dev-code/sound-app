@@ -196,7 +196,7 @@ function formatTime(seconds) {
 function updateMediaSession(sound) {
   if (!('mediaSession' in navigator) || state.shownSoundId === sound.id) return;
   state.shownSoundId = sound.id;
-  navigator.mediaSession.metadata = new MediaMetadata({ title: sound.name, artist: 'SONE' });
+  navigator.mediaSession.metadata = new MediaMetadata({ title: sound.name, artist: 'HOOKED NOISE' });
 }
 
 // ---- 再生・停止 ----
