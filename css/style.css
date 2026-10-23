@@ -116,7 +116,8 @@ main {
   box-shadow: 0 8px 24px var(--shadow);
   padding: 14px 16px 10px;
   text-align: center;
-  z-index: 20;
+  z-index: 40;
+  animation: card-in 0.35s ease both;
 }
 
 .rating-card p { margin: 0 0 6px; font-size: 0.95rem; }
@@ -584,13 +585,24 @@ dialog button {
 
 .slide.shown { opacity: 1; }
 
-/* 全画面の画像（赤ちゃんモード） */
+/* 全画面の画像。出し入れはふわっとフェードさせる */
 .stage {
   position: fixed;
   inset: 0;
   z-index: 30;
   background: #000;
   color: #f2f2f2;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.4s ease, visibility 0s linear 0.4s;
+}
+
+.stage.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.4s ease;
 }
 
 /* 寝かしつけで一定時間たったら、画像をゆっくり消して暗い画面だけにする */
@@ -632,8 +644,10 @@ dialog button {
   text-align: center;
   font-size: 0.75rem;
   color: rgba(255, 255, 255, 0.55);
-  animation: hint-fade 6s forwards;
+  opacity: 0;
 }
+
+.stage.open .stage-hint { animation: hint-fade 6s forwards; }
 
 @keyframes hint-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 
@@ -642,8 +656,12 @@ dialog button {
   position: fixed;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.22;
+  opacity: 0;
+  transition: opacity 0.8s ease;
 }
+
+.backdrop.on { opacity: 0.22; }
+
 
 .backdrop .slide { object-fit: cover; }
 
@@ -653,9 +671,12 @@ dialog button {
   inset: 0;
   z-index: 50;
   background: #000;
-  opacity: 0.55;
-  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s ease;
 }
+
+.night-veil.on { opacity: 0.55; }
+
 
 /* 設定画面の画像一覧 */
 .image-group { margin-top: 12px; }
@@ -691,4 +712,63 @@ h3.sub { font-size: 0.8rem; font-weight: 600; color: var(--muted); margin: 14px 
   color: var(--muted);
   font-size: 0.85rem;
   cursor: pointer;
+}
+
+/* ---- なめらかな動き ---- */
+
+/* iPhone で、押してから反応するまでの待ち時間をなくす */
+button,
+select,
+label,
+input { touch-action: manipulation; }
+
+/* 押したときに少し沈む。色の切り替えはふわっと */
+button {
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+    box-shadow 0.25s ease, transform 0.12s ease, opacity 0.2s ease;
+}
+
+button:active:not(:disabled) { transform: scale(0.97); }
+
+#play:active:not(:disabled) { transform: scale(0.95); }
+
+/* 再生中は、丸いボタンの周りがゆっくり呼吸するように光る */
+#play.playing { animation: breathe 4s ease-in-out infinite; }
+
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 4px var(--accent); }
+  50% { box-shadow: 0 0 0 4px var(--accent), 0 0 0 14px color-mix(in srgb, var(--accent) 22%, transparent); }
+}
+
+/* タブで画面を切り替えたとき、ふわっと出す */
+main:not([hidden]) { animation: view-in 0.28s ease both; }
+
+@keyframes view-in {
+  from { opacity: 0; transform: translateY(6px); }
+}
+
+/* ★評価のポップアップは上からすっと出す */
+@keyframes card-in {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+}
+
+/* 後から出てくるボタンや説明はふわっと出す */
+.reset-button:not([hidden]),
+.note:not([hidden]),
+.notice:not([hidden]) { animation: fade-in 0.3s ease both; }
+
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+
+dialog[open] { animation: fade-in 0.25s ease both; }
+
+/* 動きを減らす設定にしている人には、動きを止める */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

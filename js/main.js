@@ -590,9 +590,19 @@ function makeButton(text, data) {
 }
 
 // 音を種類ごとに見出しを付けて並べる
+// 音のボタンは、並びが変わったとき（モード切替など）だけ作り直す。
+// 選んだ音が変わっただけなら押した状態だけ変えて、色がなめらかに切り替わるようにする
 function renderSoundChoices() {
   const selected = selectedSound();
   const available = soundsForMode();
+  const key = available.map((s) => s.id).join(',');
+  if (els.sounds.dataset.key === key) {
+    for (const b of els.sounds.querySelectorAll('[data-sound]')) {
+      b.setAttribute('aria-pressed', b.dataset.sound === selected?.id);
+    }
+    return;
+  }
+  els.sounds.dataset.key = key;
   els.sounds.replaceChildren(
     ...categories
       .map((cat) => [cat, available.filter((s) => s.category === cat.id)])
@@ -664,11 +674,8 @@ function render() {
   for (const b of els.babyUsage.querySelectorAll('button')) {
     b.setAttribute('aria-pressed', b.dataset.usage === settings.baby.usage);
   }
-  for (const b of els.showImages.querySelectorAll('button')) {
-    b.setAttribute('aria-pressed', (b.dataset.show === '1') === mode().showImages);
-  }
-  els.showImages.querySelector('[data-show="1"]').textContent = settings.mode === 'baby' ? '画像あり' : '背景画像あり';
-  els.imageHint.hidden = !(mode().showImages && !state.images[settings.mode].length);
+  renderImageStyles();
+  els.imageHint.hidden = !(mode().imageStyle !== 'none' && !state.images[settings.mode].length);
 
   renderTime();
   renderLibrary();
@@ -680,39 +687,58 @@ function render() {
 const stageSlides = createSlideshow($('stage-slides'));
 const backdropSlides = createSlideshow(els.backdrop);
 
+// 画像の見せ方の選択肢。集中モードだけ「背景」がある
+const IMAGE_STYLES = {
+  baby: [['full', '画像あり'], ['none', '音だけ']],
+  focus: [['backdrop', '背景'], ['full', '全画面'], ['none', '音だけ']],
+};
+
+// モードが変わったときだけボタンを作り直し、ふだんは押した状態だけ変える
+function renderImageStyles() {
+  const choices = IMAGE_STYLES[settings.mode];
+  if (els.showImages.dataset.mode !== settings.mode) {
+    els.showImages.dataset.mode = settings.mode;
+    els.showImages.replaceChildren(...choices.map(([value, label]) => makeButton(label, { style: value })));
+  }
+  if (!choices.some(([value]) => value === mode().imageStyle)) mode().imageStyle = choices[0][0];
+  for (const b of els.showImages.children) b.setAttribute('aria-pressed', b.dataset.style === mode().imageStyle);
+}
+
 const isSleeping = () => settings.mode === 'baby' && settings.baby.usage === 'sleep';
-// 全画面で画像を見せるか（赤ちゃんモードで再生中・一時停止中）
+// 全画面で画像を見せるか（再生中・一時停止中）
 const stageEligible = () =>
-  settings.mode === 'baby' && settings.baby.showImages && state.images.baby.length > 0 && running();
+  mode().imageStyle === 'full' && state.images[settings.mode].length > 0 && running();
 // 寝かしつけで、一定時間たって画像を消したか
 const imagesFaded = () =>
   isSleeping() && settings.display.sleepAutoHide && running() && elapsed() >= settings.display.autoHideMin * 60;
 
 function renderDisplay() {
   const d = settings.display;
-  // 夜用表示：画面全体に黒い幕を薄くかける
-  els.nightVeil.hidden = !((isSleeping() && d.sleepNight) || (settings.mode === 'focus' && d.focusNight));
+  // 夜用表示：画面全体に黒い幕を薄くかける（ふわっと暗くなるよう、表示は class で切り替える）
+  els.nightVeil.classList.toggle('on', (isSleeping() && d.sleepNight) || (settings.mode === 'focus' && d.focusNight));
 
   const stageOn = stageEligible() && !state.stageHidden;
   const faded = imagesFaded();
-  els.stage.hidden = !stageOn;
+  els.stage.classList.toggle('open', stageOn);
   els.stage.classList.toggle('faded', faded);
   els.showStage.hidden = !(stageEligible() && state.stageHidden);
-  stageSlides.setImages(state.images.baby.map((i) => i.url));
+  if (stageOn) stageSlides.setImages(state.images[settings.mode].map((i) => i.url));
   if (stageOn && !faded && state.playing) stageSlides.play(d.slideSeconds);
   else stageSlides.pause();
 
-  // 集中モードでは画像を背景にうっすら敷く
-  const backdropOn = settings.mode === 'focus' && settings.focus.showImages && state.images.focus.length > 0;
-  els.backdrop.hidden = !backdropOn;
-  backdropSlides.setImages(backdropOn ? state.images.focus.map((i) => i.url) : []);
+  // 集中モードの「背景」：再生画面の後ろに画像をうっすら敷く
+  const backdropOn = settings.mode === 'focus' && settings.focus.imageStyle === 'backdrop'
+    && state.images.focus.length > 0;
+  els.backdrop.classList.toggle('on', backdropOn);
+  if (backdropOn) backdropSlides.setImages(state.images.focus.map((i) => i.url));
   if (backdropOn && state.playing) backdropSlides.play(d.slideSeconds);
   else backdropSlides.pause();
 
-  updateWakeLock(stageOn && !faded && state.playing && settings.baby.usage === 'soothe');
+  // 全画面で見せている間は画面を暗くしない（寝かしつけは除く）
+  updateWakeLock(stageOn && !faded && state.playing && !isSleeping());
 }
 
-// 「泣き止み」で画像を見せている間は、iPhone の画面が自動で暗くならないようにする
+// 全画面で画像を見せている間は、iPhone の画面が自動で暗くならないようにする
 async function updateWakeLock(wanted) {
   if (!('wakeLock' in navigator)) return;
   state.wakeWanted = wanted;
@@ -992,9 +1018,11 @@ els.babyUsage.addEventListener('click', (e) => {
 });
 
 els.showImages.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-show]');
+  const b = e.target.closest('[data-style]');
   if (!b) return;
-  mode().showImages = b.dataset.show === '1';
+  mode().imageStyle = b.dataset.style;
+  // 全画面に切り替えたら、閉じていても開き直す
+  if (b.dataset.style === 'full') state.stageHidden = false;
   saveSettings(settings);
   render();
 });

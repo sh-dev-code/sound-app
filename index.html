@@ -74,8 +74,6 @@
     <section>
       <h2>画像</h2>
       <div id="show-images" class="segmented">
-        <button type="button" data-show="1">画像あり</button>
-        <button type="button" data-show="0">音だけ</button>
       </div>
       <p id="image-hint" class="note">画像は「設定」から追加できます。</p>
     </section>
@@ -119,7 +117,7 @@
   </nav>
 
   <!-- 赤ちゃんモードで再生中に全画面で見せる画像 -->
-  <div id="stage" class="stage" hidden>
+  <div id="stage" class="stage">
     <div id="stage-slides" class="slides"></div>
     <div class="stage-bar">
       <div class="stage-info">
@@ -132,10 +130,10 @@
   </div>
 
   <!-- 集中モードの背景画像 -->
-  <div id="backdrop" class="slides backdrop" hidden></div>
+  <div id="backdrop" class="slides backdrop"></div>
 
   <!-- 夜用表示：画面全体を暗くする幕 -->
-  <div id="night-veil" class="night-veil" hidden></div>
+  <div id="night-veil" class="night-veil"></div>
 
   <dialog id="baby-dialog">
     <h2>赤ちゃんモードを使う前に</h2>

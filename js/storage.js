@@ -16,11 +16,11 @@ const DEFAULTS = {
     { id: 'chores', name: '家事' },
   ],
   // usage: 赤ちゃんモードの使い方。'soothe'（泣き止み：画像を見せ続ける）か 'sleep'（寝かしつけ：暗くして画像を消す）
-  // showImages: 画像を見せるか（false なら「音だけ」）
-  baby: { sound: 'white', volume: 50, timer: 30, usage: 'sleep', showImages: true },
+  // imageStyle: 画像の見せ方。'full'（全画面）、'backdrop'（再生画面の背景。集中モードのみ）、'none'（音だけ）
+  baby: { sound: 'white', volume: 50, timer: 30, usage: 'sleep', imageStyle: 'full' },
   focus: {
     sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual', playlistId: null, activity: null,
-    showImages: true,
+    imageStyle: 'backdrop',
   },
   // 画像の見せ方
   display: {
@@ -44,6 +44,11 @@ export function loadSettings() {
       Object.assign(settings.baby, saved.baby);
       Object.assign(settings.focus, saved.focus);
       Object.assign(settings.display, saved.display);
+      // 以前の「画像を見せるか（はい／いいえ）」の設定を、見せ方の設定に置き換える
+      for (const m of ['baby', 'focus']) {
+        if (saved[m]?.showImages === false && !saved[m].imageStyle) settings[m].imageStyle = 'none';
+        delete settings[m].showImages;
+      }
     }
   } catch {
     // 保存できない環境（プライベートブラウズなど）では初期値で動かす
