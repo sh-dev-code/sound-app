@@ -673,6 +673,8 @@ dialog button {
   background: #000;
   opacity: 0;
   transition: opacity 0.8s ease;
+  /* 幕はタップを受け止めず、下のボタンにそのまま通す */
+  pointer-events: none;
 }
 
 .night-veil.on { opacity: 0.55; }
