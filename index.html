@@ -26,6 +26,11 @@
   <main id="view-play">
     <p id="notice" class="notice">音量は小さめに、スマホは赤ちゃんの耳元から離して置いてください。</p>
 
+    <div id="baby-usage" class="segmented">
+      <button type="button" data-usage="soothe">泣き止み</button>
+      <button type="button" data-usage="sleep">寝かしつけ</button>
+    </div>
+
     <div id="play-method" class="segmented">
       <button type="button" data-method="manual">選んで再生</button>
       <button type="button" data-method="omakase">おまかせ</button>
@@ -63,7 +68,17 @@
       <button type="button" id="play" disabled>再生</button>
       <p id="now-playing" class="now-playing" aria-live="polite"></p>
       <button type="button" id="reset" class="reset-button" hidden>リセット（タイマーを最初に戻す）</button>
+      <button type="button" id="show-stage" class="reset-button" hidden>画像を全画面で見せる</button>
     </div>
+
+    <section>
+      <h2>画像</h2>
+      <div id="show-images" class="segmented">
+        <button type="button" data-show="1">画像あり</button>
+        <button type="button" data-show="0">音だけ</button>
+      </div>
+      <p id="image-hint" class="note">画像は「設定」から追加できます。</p>
+    </section>
 
     <section>
       <h2>音量</h2>
@@ -102,6 +117,25 @@
     <button type="button" data-view="playlists">プレイリスト</button>
     <button type="button" data-view="settings">設定</button>
   </nav>
+
+  <!-- 赤ちゃんモードで再生中に全画面で見せる画像 -->
+  <div id="stage" class="stage" hidden>
+    <div id="stage-slides" class="slides"></div>
+    <div class="stage-bar">
+      <div class="stage-info">
+        <span id="stage-phase"></span>
+        <span id="stage-time" class="stage-time"></span>
+      </div>
+      <button type="button" id="stage-play">一時停止</button>
+    </div>
+    <p class="stage-hint">画像をタップすると操作画面に戻ります</p>
+  </div>
+
+  <!-- 集中モードの背景画像 -->
+  <div id="backdrop" class="slides backdrop" hidden></div>
+
+  <!-- 夜用表示：画面全体を暗くする幕 -->
+  <div id="night-veil" class="night-veil" hidden></div>
 
   <dialog id="baby-dialog">
     <h2>赤ちゃんモードを使う前に</h2>

@@ -10,6 +10,8 @@ import {
 } from './playlists.js';
 import { createPlaylistEditor } from './playlist-editor.js';
 import { createSettingsView, THEMES } from './settings-view.js';
+import { listImages, addImage, deleteImage, clearImages, MAX_IMAGES_PER_MODE } from './images.js';
+import { createSlideshow } from './slideshow.js';
 
 // 赤ちゃんモードの音量上限は集中モードの 40%
 const MAX_GAIN = { baby: 0.4, focus: 1 };
@@ -57,6 +59,16 @@ const els = {
   time: $('time'),
   play: $('play'),
   reset: $('reset'),
+  babyUsage: $('baby-usage'),
+  showImages: $('show-images'),
+  imageHint: $('image-hint'),
+  showStage: $('show-stage'),
+  stage: $('stage'),
+  stagePhase: $('stage-phase'),
+  stageTime: $('stage-time'),
+  stagePlay: $('stage-play'),
+  backdrop: $('backdrop'),
+  nightVeil: $('night-veil'),
   nowPlaying: $('now-playing'),
   volume: $('volume'),
   volumeValue: $('volume-value'),
@@ -101,6 +113,11 @@ const state = {
   // 評価を聞いている音と、その回を流したときの作業
   ratingFor: null,
   ratingActivity: null,
+  // 追加した画像。モードごとに [{ id, url }]
+  images: { baby: [], focus: [] },
+  // 全画面の画像をタップして閉じたか（次に再生するまで閉じたまま）
+  stageHidden: false,
+  wakeLock: null,
 };
 let sounds = [];
 let categories = [];
@@ -187,6 +204,7 @@ function updateMediaSession(sound) {
 // 最初から再生する
 function start() {
   stopPreview();
+  state.stageHidden = false;
   const playlist = isPlaylist() ? structuredClone(playablePlaylist()) : null;
   if (isPlaylist() && !playlist) return;
   if (isOmakase()) {
@@ -343,6 +361,7 @@ function tick() {
   }
   if (state.playing) updateMediaSession(playingSound());
   renderTime();
+  renderDisplay();
 }
 
 // ---- プレイリスト ----
@@ -552,6 +571,8 @@ function renderTime() {
     time = formatTime((resting ? period() : focusSeconds()) - inRound);
   }
   els.phase.textContent = state.paused ? `一時停止中・${phase}` : phase;
+  els.stagePhase.textContent = els.phase.textContent;
+  els.stageTime.textContent = time;
   els.time.textContent = time;
 
   if (running()) els.nowPlaying.textContent = playingSound().name;
@@ -630,6 +651,7 @@ function render() {
   els.breakMin.value = settings.focus.breakMin;
 
   els.play.textContent = state.loading ? '読み込み中' : state.playing ? '一時停止' : state.paused ? '再開' : '再生';
+  els.stagePlay.textContent = els.play.textContent;
   els.play.classList.toggle('playing', state.playing || state.loading);
   els.reset.hidden = !state.paused;
   els.play.disabled = !sounds.length || (isPlaylist() && !running() && !state.loading && !playablePlaylist());
@@ -638,8 +660,96 @@ function render() {
   els.volumeValue.textContent = mode().volume;
   els.volumeNote.hidden = settings.mode !== 'baby';
 
+  els.babyUsage.hidden = settings.mode !== 'baby';
+  for (const b of els.babyUsage.querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', b.dataset.usage === settings.baby.usage);
+  }
+  for (const b of els.showImages.querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', (b.dataset.show === '1') === mode().showImages);
+  }
+  els.showImages.querySelector('[data-show="1"]').textContent = settings.mode === 'baby' ? '画像あり' : '背景画像あり';
+  els.imageHint.hidden = !(mode().showImages && !state.images[settings.mode].length);
+
   renderTime();
   renderLibrary();
+  renderDisplay();
+}
+
+// ---- 画像の表示 ----
+
+const stageSlides = createSlideshow($('stage-slides'));
+const backdropSlides = createSlideshow(els.backdrop);
+
+const isSleeping = () => settings.mode === 'baby' && settings.baby.usage === 'sleep';
+// 全画面で画像を見せるか（赤ちゃんモードで再生中・一時停止中）
+const stageEligible = () =>
+  settings.mode === 'baby' && settings.baby.showImages && state.images.baby.length > 0 && running();
+// 寝かしつけで、一定時間たって画像を消したか
+const imagesFaded = () =>
+  isSleeping() && settings.display.sleepAutoHide && running() && elapsed() >= settings.display.autoHideMin * 60;
+
+function renderDisplay() {
+  const d = settings.display;
+  // 夜用表示：画面全体に黒い幕を薄くかける
+  els.nightVeil.hidden = !((isSleeping() && d.sleepNight) || (settings.mode === 'focus' && d.focusNight));
+
+  const stageOn = stageEligible() && !state.stageHidden;
+  const faded = imagesFaded();
+  els.stage.hidden = !stageOn;
+  els.stage.classList.toggle('faded', faded);
+  els.showStage.hidden = !(stageEligible() && state.stageHidden);
+  stageSlides.setImages(state.images.baby.map((i) => i.url));
+  if (stageOn && !faded && state.playing) stageSlides.play(d.slideSeconds);
+  else stageSlides.pause();
+
+  // 集中モードでは画像を背景にうっすら敷く
+  const backdropOn = settings.mode === 'focus' && settings.focus.showImages && state.images.focus.length > 0;
+  els.backdrop.hidden = !backdropOn;
+  backdropSlides.setImages(backdropOn ? state.images.focus.map((i) => i.url) : []);
+  if (backdropOn && state.playing) backdropSlides.play(d.slideSeconds);
+  else backdropSlides.pause();
+
+  updateWakeLock(stageOn && !faded && state.playing && settings.baby.usage === 'soothe');
+}
+
+// 「泣き止み」で画像を見せている間は、iPhone の画面が自動で暗くならないようにする
+async function updateWakeLock(wanted) {
+  if (!('wakeLock' in navigator)) return;
+  state.wakeWanted = wanted;
+  if (wanted && !state.wakeLock) {
+    state.wakeLock = 'pending';
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      state.wakeLock = lock;
+      lock.addEventListener('release', () => {
+        if (state.wakeLock === lock) state.wakeLock = null;
+      });
+      // 待っている間に不要になっていたら手放す
+      if (!state.wakeWanted) updateWakeLock(false);
+    } catch {
+      state.wakeLock = null;
+    }
+  } else if (!wanted && state.wakeLock && state.wakeLock !== 'pending') {
+    const lock = state.wakeLock;
+    state.wakeLock = null;
+    lock.release();
+  }
+}
+
+// 端末内に保存した画像を読み込み直す
+async function refreshImages() {
+  for (const m of ['baby', 'focus']) {
+    let list = [];
+    try {
+      list = await listImages(m);
+    } catch (e) {
+      log(`画像を読み込めませんでした: ${e.message}`);
+    }
+    for (const old of state.images[m]) URL.revokeObjectURL(old.url);
+    state.images[m] = list.map((img) => ({ id: img.id, url: URL.createObjectURL(img.blob) }));
+  }
+  render();
+  if (state.view === 'settings') settingsView.render();
 }
 
 function renderPlaylistPanel() {
@@ -760,6 +870,29 @@ const settingsView = createSettingsView({
   root: els.views.settings,
   settings,
   fileSounds: () => sounds.filter((s) => s.type === 'file'),
+  images: (m) => state.images[m],
+  maxImages: MAX_IMAGES_PER_MODE,
+  onAddImages: async (m, files) => {
+    const room = MAX_IMAGES_PER_MODE - state.images[m].length;
+    if (files.length > room) alert(`1つのモードに追加できるのは${MAX_IMAGES_PER_MODE}枚までです。最初の${room}枚を追加します。`);
+    for (const file of files.slice(0, room)) {
+      try {
+        await addImage(m, file);
+      } catch (e) {
+        log(`画像を追加できませんでした: ${e.message}`);
+      }
+    }
+    await refreshImages();
+  },
+  onDeleteImage: async (id) => {
+    await deleteImage(id);
+    await refreshImages();
+  },
+  onDisplay: (key, value) => {
+    settings.display[key] = value;
+    saveSettings(settings);
+    render();
+  },
   onTheme: (theme) => {
     settings.theme = theme;
     saveSettings(settings);
@@ -781,15 +914,19 @@ const settingsView = createSettingsView({
     settings.crossfade = seconds;
     saveSettings(settings);
   },
-  onReset: (what) => {
+  onReset: async (what) => {
     if (running() || state.loading) stop('データのリセット');
     if (what === 'ratings') {
       resetRatings(ratings);
     } else if (what === 'playlists') {
       playlists.length = 0;
       savePlaylists(playlists);
+    } else if (what === 'images') {
+      await clearImages();
+      await refreshImages();
     } else {
       clearAllData();
+      await clearImages().catch(() => {});
       location.reload();
       return;
     }
@@ -822,13 +959,45 @@ els.focusMin.addEventListener('change', () => change(() => { settings.focus.focu
 els.breakMin.addEventListener('change', () => change(() => { settings.focus.breakMin = Number(els.breakMin.value); }));
 
 // 再生中は一時停止、一時停止中は再開。読み込み中に押したら取りやめる
-els.play.addEventListener('click', () => {
+function togglePlay() {
   if (state.loading) stop('取りやめ');
   else if (state.playing) pause();
   else if (state.paused) resume();
   else start();
-});
+}
+els.play.addEventListener('click', togglePlay);
 els.reset.addEventListener('click', () => stop('リセット'));
+
+// 全画面の画像：一時停止ボタン以外をタップすると、普通の再生画面に戻る
+els.stagePlay.addEventListener('click', (e) => {
+  e.stopPropagation();
+  togglePlay();
+});
+els.stage.addEventListener('click', () => {
+  state.stageHidden = true;
+  renderDisplay();
+});
+els.showStage.addEventListener('click', () => {
+  state.stageHidden = false;
+  renderDisplay();
+});
+
+els.babyUsage.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-usage]');
+  if (!b) return;
+  settings.baby.usage = b.dataset.usage;
+  saveSettings(settings);
+  log(`使い方: ${b.textContent}`);
+  render();
+});
+
+els.showImages.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-show]');
+  if (!b) return;
+  mode().showImages = b.dataset.show === '1';
+  saveSettings(settings);
+  render();
+});
 
 els.volume.addEventListener('input', () => {
   mode().volume = Number(els.volume.value);
@@ -926,6 +1095,8 @@ document.addEventListener('visibilitychange', () => {
       engine.checkInterrupted();
       if (state.playing) tick();
     }
+    // 画面を離れると「画面を暗くしない」設定は解除されるので、かけ直す
+    renderDisplay();
   }
 });
 
@@ -942,6 +1113,7 @@ async function init() {
   els.play.disabled = false;
   render();
   showBabyNoticeIfFirstTime();
+  refreshImages();
   log(`準備完了（マナーモード対策: ${'audioSession' in navigator ? '対応' : '非対応'}）`);
 }
 

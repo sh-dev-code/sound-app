@@ -15,9 +15,20 @@ const DEFAULTS = {
     { id: 'work', name: '仕事' },
     { id: 'chores', name: '家事' },
   ],
-  baby: { sound: 'white', volume: 50, timer: 30 },
+  // usage: 赤ちゃんモードの使い方。'soothe'（泣き止み：画像を見せ続ける）か 'sleep'（寝かしつけ：暗くして画像を消す）
+  // showImages: 画像を見せるか（false なら「音だけ」）
+  baby: { sound: 'white', volume: 50, timer: 30, usage: 'sleep', showImages: true },
   focus: {
     sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual', playlistId: null, activity: null,
+    showImages: true,
+  },
+  // 画像の見せ方
+  display: {
+    slideSeconds: 10, // スライドショーの切り替え間隔
+    sleepNight: true, // 寝かしつけで夜用表示にする
+    sleepAutoHide: true, // 寝かしつけで画像を自動で消す
+    autoHideMin: 5, // 自動で消すまでの分数
+    focusNight: false, // 集中モードでも夜用表示にする
   },
 };
 
@@ -32,6 +43,7 @@ export function loadSettings() {
       settings.activities = saved.activities ?? settings.activities;
       Object.assign(settings.baby, saved.baby);
       Object.assign(settings.focus, saved.focus);
+      Object.assign(settings.display, saved.display);
     }
   } catch {
     // 保存できない環境（プライベートブラウズなど）では初期値で動かす

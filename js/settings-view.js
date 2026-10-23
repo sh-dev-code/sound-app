@@ -1,6 +1,9 @@
 // 設定画面
 
 const CROSSFADES = [0, 1, 3, 5, 10];
+const SLIDE_SECONDS = [5, 10, 30, 60];
+const AUTO_HIDE_MINUTES = [3, 5, 10, 15];
+const IMAGE_MODES = [{ id: 'baby', name: '赤ちゃんモード' }, { id: 'focus', name: '集中モード' }];
 
 // 見本の色は css/style.css の配色と合わせる（背景・面・集中の色・赤ちゃんの色）
 export const THEMES = [
@@ -18,11 +21,78 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
+// 選択肢のボタンを横に並べる。いま選ばれている値のボタンを押した状態にする
+function segmented(values, current, label, dataKey) {
+  return el('div', { className: 'segmented' },
+    ...values.map((v) => {
+      const b = el('button', { type: 'button', textContent: label(v), dataset: { [dataKey]: v } });
+      b.setAttribute('aria-pressed', v === current);
+      return b;
+    }),
+  );
+}
+
+function toggle(text, key, checked) {
+  return el('label', { className: 'toggle' },
+    el('input', { type: 'checkbox', checked, dataset: { display: key } }),
+    el('span', { textContent: text }),
+  );
+}
+
 // onTheme(配色ID)、onCrossfade(秒)、onAddActivity(名前)、onRemoveActivity(作業ID)、
-// onReset('ratings' | 'playlists' | 'all') は変更を実際に行う側の関数
+// onAddImages(モード, ファイル一覧)、onDeleteImage(画像ID)、onDisplay(項目, 値)、
+// onReset('ratings' | 'playlists' | 'images' | 'all') は変更を実際に行う側の関数。
+// images(モード) はそのモードの画像 [{ id, url }] を返す
 export function createSettingsView({
-  root, settings, fileSounds, onTheme, onCrossfade, onAddActivity, onRemoveActivity, onReset,
+  root, settings, fileSounds, images, maxImages, onTheme, onCrossfade, onAddActivity, onRemoveActivity,
+  onAddImages, onDeleteImage, onDisplay, onReset,
 }) {
+  function renderImages() {
+    return el('section', {},
+      el('h2', { textContent: '画像' }),
+      el('p', { className: 'note', textContent: 'アルバムから選んだ画像は、このスマホの中だけに保存されます。外には送られません。' }),
+      ...IMAGE_MODES.map((m) => {
+        const list = images(m.id);
+        return el('div', { className: 'image-group' },
+          el('h3', { textContent: `${m.name}（${list.length}/${maxImages}枚）` }),
+          el('div', { className: 'image-grid' },
+            ...list.map((img) =>
+              el('div', { className: 'image-thumb' },
+                el('img', { src: img.url, alt: '' }),
+                el('button', { type: 'button', className: 'icon', textContent: '✕', ariaLabel: '画像を削除', dataset: { deleteImage: img.id } }),
+              ),
+            ),
+            list.length < maxImages
+              ? el('label', { className: 'image-add' },
+                el('span', { textContent: '＋ 追加' }),
+                el('input', { type: 'file', accept: 'image/*', multiple: true, hidden: true, dataset: { addImages: m.id } }),
+              )
+              : '',
+          ),
+        );
+      }),
+    );
+  }
+
+  function renderDisplay() {
+    const d = settings.display;
+    return el('section', {},
+      el('h2', { textContent: '画像の見せ方' }),
+      el('h3', { className: 'sub', textContent: 'スライドショーの切り替え間隔' }),
+      segmented(SLIDE_SECONDS, d.slideSeconds, (s) => `${s}秒`, 'slideSeconds'),
+      el('h3', { className: 'sub', textContent: '赤ちゃんモードの「寝かしつけ」' }),
+      el('div', { className: 'stack' },
+        toggle('夜用表示（画面を暗くする）', 'sleepNight', d.sleepNight),
+        toggle('一定時間後に画像を消して音だけにする', 'sleepAutoHide', d.sleepAutoHide),
+      ),
+      el('h3', { className: 'sub', textContent: '画像を消すまでの時間' }),
+      segmented(AUTO_HIDE_MINUTES, d.autoHideMin, (m) => `${m}分`, 'autoHideMin'),
+      el('p', { className: 'note', textContent: '「泣き止み」では、画像を明るいまま表示し続けます。' }),
+      el('h3', { className: 'sub', textContent: '集中モード' }),
+      toggle('夜用表示（画面を暗くする）', 'focusNight', d.focusNight),
+    );
+  }
+
   function render() {
     const activities = el('ul', { className: 'activity-list' },
       ...settings.activities.map((a) =>
@@ -72,6 +142,8 @@ export function createSettingsView({
         el('h2', { textContent: '画面の色' }),
         themes,
       ),
+      renderImages(),
+      renderDisplay(),
       el('section', {},
         el('h2', { textContent: '作業の種類' }),
         activities,
@@ -95,6 +167,7 @@ export function createSettingsView({
         el('div', { className: 'stack' },
           el('button', { type: 'button', className: 'danger', textContent: '★評価と試した回数を消す', dataset: { reset: 'ratings' } }),
           el('button', { type: 'button', className: 'danger', textContent: 'プレイリストをすべて消す', dataset: { reset: 'playlists' } }),
+          el('button', { type: 'button', className: 'danger', textContent: '画像をすべて消す', dataset: { reset: 'images' } }),
           el('button', { type: 'button', className: 'danger', textContent: 'すべてのデータと設定を消す', dataset: { reset: 'all' } }),
         ),
         el('p', { className: 'note', textContent: 'データはこのスマホの中だけに保存されています。消すと元に戻せません。' }),
@@ -111,6 +184,7 @@ export function createSettingsView({
   const MESSAGES = {
     ratings: '★評価と試した回数をすべて消しますか？',
     playlists: 'プレイリストをすべて消しますか？',
+    images: '追加した画像をすべて消しますか？',
     all: 'すべてのデータと設定を消して、最初の状態に戻しますか？',
   };
 
@@ -127,6 +201,14 @@ export function createSettingsView({
       if (!confirm(`「${a.name}」を削除しますか？この作業での★評価の記録も消えます。`)) return;
       onRemoveActivity(a.id);
       render();
+    } else if (b.dataset.deleteImage) {
+      if (confirm('この画像を削除しますか？')) onDeleteImage(Number(b.dataset.deleteImage));
+    } else if (b.dataset.slideSeconds) {
+      onDisplay('slideSeconds', Number(b.dataset.slideSeconds));
+      render();
+    } else if (b.dataset.autoHideMin) {
+      onDisplay('autoHideMin', Number(b.dataset.autoHideMin));
+      render();
     } else if (b.dataset.theme) {
       onTheme(b.dataset.theme);
       render();
@@ -135,6 +217,15 @@ export function createSettingsView({
       render();
     } else if (b.dataset.reset && confirm(MESSAGES[b.dataset.reset])) {
       onReset(b.dataset.reset);
+    }
+  });
+
+  root.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t.dataset.addImages && t.files.length) {
+      onAddImages(t.dataset.addImages, [...t.files]);
+    } else if (t.dataset.display) {
+      onDisplay(t.dataset.display, t.checked);
     }
   });
 

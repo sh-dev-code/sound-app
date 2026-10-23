@@ -567,3 +567,128 @@ dialog button {
   color: var(--accent-text);
   font-weight: 600;
 }
+
+/* ---- 画像 ---- */
+
+.slides { position: absolute; inset: 0; overflow: hidden; }
+
+.slide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+.slide.shown { opacity: 1; }
+
+/* 全画面の画像（赤ちゃんモード） */
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: #000;
+  color: #f2f2f2;
+}
+
+/* 寝かしつけで一定時間たったら、画像をゆっくり消して暗い画面だけにする */
+.stage.faded .slide { opacity: 0; transition: opacity 4s ease; }
+
+.stage-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px calc(env(safe-area-inset-bottom) + 14px);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+}
+
+.stage-info { display: flex; flex-direction: column; font-size: 0.8rem; color: rgba(255, 255, 255, 0.75); }
+
+.stage-time { font-size: 1.6rem; font-weight: 300; font-variant-numeric: tabular-nums; color: #fff; }
+
+#stage-play {
+  min-width: 96px;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-weight: 600;
+}
+
+.stage-hint {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.55);
+  animation: hint-fade 6s forwards;
+}
+
+@keyframes hint-fade { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+
+/* 集中モードの背景画像：うっすら敷く */
+.backdrop {
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.22;
+}
+
+.backdrop .slide { object-fit: cover; }
+
+/* 夜用表示：画面全体に黒い幕を薄くかける（操作はそのままできる） */
+.night-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #000;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* 設定画面の画像一覧 */
+.image-group { margin-top: 12px; }
+
+.image-group h3,
+h3.sub { font-size: 0.8rem; font-weight: 600; color: var(--muted); margin: 14px 0 6px; }
+
+.image-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+.image-thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--surface-2); }
+
+.image-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.image-thumb .icon {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.75rem;
+}
+
+.image-add {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--surface-2);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
