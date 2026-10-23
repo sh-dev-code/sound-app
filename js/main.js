@@ -109,7 +109,13 @@ function log(message) {
   while (els.log.children.length > 50) els.log.lastChild.remove();
 }
 
-const engine = new SoundEngine(log);
+// ロック画面の停止ボタンなどで iPhone 側に音を止められたら、アプリも停止扱いにしてタイマーを止める
+const engine = new SoundEngine(log, {
+  onInterrupted: () => {
+    if (state.playing) stop('ロック画面などから停止されました');
+    else if (state.previewing) stopPreview();
+  },
+});
 
 const mode = () => settings[settings.mode];
 const soundsForMode = () => sounds.filter((s) => s.modes.includes(settings.mode));
@@ -220,6 +226,7 @@ async function start() {
   state.ticker = setInterval(tick, 250);
   log(`再生: ${playlist ? `プレイリスト「${playlist.name}」` : sound.name}${omakase ? '（おまかせ）' : ''}`);
   updateMediaSession(sound);
+  setPlaybackState('playing');
   if (omakase) queueNextRound();
   if (playlist) queuePlaylistNext();
   render();
@@ -237,8 +244,14 @@ function stop(reason = '停止') {
   state.omakase = null;
   state.playlist = null;
   clearInterval(state.ticker);
+  setPlaybackState('paused');
   log(reason);
   render();
+}
+
+// ロック画面の再生／停止ボタンの表示をアプリの状態と合わせる
+function setPlaybackState(value) {
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = value;
 }
 
 // 再生中に音やタイマーを変えたら、新しい設定で最初から鳴らし直す
@@ -839,8 +852,8 @@ document.addEventListener('visibilitychange', () => {
   } else {
     log('画面に戻りました');
     if (state.playing) {
-      engine.wake();
-      tick();
+      engine.checkInterrupted();
+      if (state.playing) tick();
     }
   }
 });

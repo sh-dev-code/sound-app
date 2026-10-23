@@ -261,7 +261,20 @@ select.wide { width: 100%; min-height: 48px; }
   padding: 6px 6px 6px 0;
 }
 
-.pl-item.dragging { background: var(--surface-2); box-shadow: 0 0 0 2px var(--accent); }
+/* ドラッグ中：つかんだ行は浮き上がって指についてくる。ほかの行はスッとずれて場所をあける */
+.pl-item.shifting { transition: transform 0.18s ease; }
+
+.pl-item.dragging {
+  position: relative;
+  z-index: 5;
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--accent), 0 10px 24px var(--shadow);
+  transition: box-shadow 0.15s ease;
+}
+
+.pl-item.dragging .drag-handle { color: var(--accent); cursor: grabbing; }
+
+.pl-item.dropping { transition: transform 0.15s ease, box-shadow 0.15s ease; }
 
 .drag-handle {
   width: 36px;

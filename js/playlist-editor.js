@@ -169,25 +169,41 @@ export function createPlaylistEditor({ root, playlists, availableSounds, onChang
   });
 
   // 「≡」をつかんで上下に動かすと並べ替えられる。
-  // 行を入れ替えると iPhone はつかんでいる要素を見失うため、指の動きは画面全体で追いかける
+  // つかんだ行は指にそのままついてきて、ほかの行は行き先をあけるようにスッとずれる。
+  // 行そのものは離すまで動かさず、見た目だけずらす（iPhone がつかんでいる要素を見失わないように）
   root.addEventListener('pointerdown', (e) => {
     const handle = e.target.closest('.drag-handle');
     if (!handle) return;
     e.preventDefault();
     const row = handle.closest('.pl-item');
-    const list = row.parentElement;
+    const rows = [...row.parentElement.children];
+    const from = rows.indexOf(row);
+    const boxes = rows.map((r) => r.getBoundingClientRect());
+    // 1 行分ずらす距離（行の高さ＋すき間）
+    const step = rows.length > 1 ? boxes[1].top - boxes[0].top : boxes[0].height;
+    const startY = e.clientY;
     const pointerId = e.pointerId;
+    let to = from;
     row.classList.add('dragging');
+    rows.forEach((r) => r !== row && r.classList.add('shifting'));
 
     const onMove = (ev) => {
       if (ev.pointerId !== pointerId) return;
-      const others = [...list.children].filter((r) => r !== row);
-      const after = others.find((r) => {
-        const box = r.getBoundingClientRect();
-        return ev.clientY < box.top + box.height / 2;
+      // 先頭より上・最後より下には行かないようにする
+      const dy = Math.min(
+        Math.max(ev.clientY - startY, boxes[0].top - boxes[from].top),
+        boxes[rows.length - 1].top - boxes[from].top,
+      );
+      row.style.transform = `translateY(${dy}px) scale(1.03)`;
+      const center = boxes[from].top + boxes[from].height / 2 + dy;
+      to = boxes.filter((b, i) => i !== from && b.top + b.height / 2 < center).length;
+      rows.forEach((r, i) => {
+        if (r === row) return;
+        let shift = 0;
+        if (from < to && i > from && i <= to) shift = -step;
+        if (to < from && i >= to && i < from) shift = step;
+        r.style.transform = shift ? `translateY(${shift}px)` : '';
       });
-      if (after && row.nextElementSibling !== after) list.insertBefore(row, after);
-      else if (!after && list.lastElementChild !== row) list.append(row);
     };
     // ドラッグ中に画面がスクロールしないようにする
     const blockScroll = (ev) => ev.preventDefault();
@@ -197,11 +213,21 @@ export function createPlaylistEditor({ root, playlists, availableSounds, onChang
       document.removeEventListener('pointerup', onUp);
       document.removeEventListener('pointercancel', onUp);
       document.removeEventListener('touchmove', blockScroll);
-      row.classList.remove('dragging');
-      const pl = editing();
-      const order = [...list.children].map((r) => Number(r.dataset.index));
-      pl.items = order.map((i) => pl.items[i]);
-      commit();
+      if (to === from) {
+        // 動かさなかったときは、元の位置へスッと戻す
+        row.classList.remove('dragging');
+        rows.forEach((r) => { r.style.transform = ''; });
+        setTimeout(() => rows.forEach((r) => r.classList.remove('shifting')), 200);
+        return;
+      }
+      // 行き先の位置へスッと収めてから、並び順を確定する
+      row.classList.add('dropping');
+      row.style.transform = `translateY(${(to - from) * step}px)`;
+      setTimeout(() => {
+        const { items } = editing();
+        items.splice(to, 0, ...items.splice(from, 1));
+        commit();
+      }, 160);
     };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);

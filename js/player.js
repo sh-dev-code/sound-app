@@ -27,8 +27,10 @@ function safeStop(node, at) {
 //   音 → 音ごとの補正 → envelope（タイマーによる増減）→ [高音カット] → master（音量）→ スピーカー
 //   合図音 → master
 export class SoundEngine {
-  constructor(log) {
+  // onInterrupted: ロック画面の停止ボタンや電話などで、iPhone 側に音を止められたときに呼ぶ
+  constructor(log, { onInterrupted } = {}) {
     this.log = log;
+    this.onInterrupted = onInterrupted;
     this.ctx = null;
     this.session = null;
   }
@@ -39,7 +41,10 @@ export class SoundEngine {
     preferPlayback();
     if (!this.ctx) {
       this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      this.ctx.onstatechange = () => this.log(`音の状態: ${this.ctx.state}`);
+      this.ctx.onstatechange = () => {
+        this.log(`音の状態: ${this.ctx.state}`);
+        this.checkInterrupted();
+      };
     }
     this.ctx.resume();
     return this.ctx;
@@ -166,11 +171,10 @@ export class SoundEngine {
     setTimeout(() => s.master.disconnect(), 600);
   }
 
-  // 画面に戻ったとき、止まっていたら再開を試みる
-  wake() {
-    if (this.ctx && this.session && this.ctx.state !== 'running') {
-      this.ctx.resume().then(() => this.log('再開しました'));
-    }
+  // 鳴らしているはずなのに iPhone 側で音が止められていたら知らせる。
+  // 勝手に再開すると、ロック画面で止めたのにページを開いたとたん鳴り出してしまうため、再開はしない
+  checkInterrupted() {
+    if (this.ctx && this.session && this.ctx.state !== 'running') this.onInterrupted?.();
   }
 }
 
