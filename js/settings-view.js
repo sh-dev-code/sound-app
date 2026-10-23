@@ -42,9 +42,10 @@ function toggle(text, key, checked) {
 // onTheme(配色ID)、onCrossfade(秒)、onAddActivity(名前)、onRemoveActivity(作業ID)、
 // onAddImages(モード, ファイル一覧)、onDeleteImage(画像ID)、onDisplay(項目, 値)、
 // onReset('ratings' | 'playlists' | 'images' | 'all') は変更を実際に行う側の関数。
-// images(モード) はそのモードの画像 [{ id, url }] を返す
+// images(モード) はそのモードの画像 [{ id, url }] を返す。
+// logPanel は動作ログの部品で、画面の一番下に置く（作り直しても中身が消えないよう、同じ部品を移し替える）
 export function createSettingsView({
-  root, settings, fileSounds, images, maxImages, onTheme, onCrossfade, onAddActivity, onRemoveActivity,
+  root, settings, fileSounds, images, maxImages, logPanel, onTheme, onCrossfade, onAddActivity, onRemoveActivity,
   onAddImages, onDeleteImage, onDisplay, onReset,
 }) {
   function renderImages() {
@@ -178,6 +179,7 @@ export function createSettingsView({
         el('h2', { textContent: '音素材の出典' }),
         credits,
       ),
+      logPanel,
     );
   }
 

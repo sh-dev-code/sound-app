@@ -1,20 +1,38 @@
-# 音で集中＆寝かしつけアプリ
+# SONE
 
-赤ちゃんモードと集中モードを切り替えて使う、音を流すスマホ向けWebアプリ。要件は [CLAUDE.md](CLAUDE.md) を参照。
+sound と zone を合わせた名前。赤ちゃんモードと集中モードを切り替えて、状況に合った音を流すスマホ向けWebアプリ。要件は [CLAUDE.md](CLAUDE.md) を参照。
+
+公開先：https://sh-dev-code.github.io/sound-app/
+
+## iPhone のホーム画面に追加する
+
+1. Safari で上のアドレスを開く
+2. 画面下の共有ボタン（四角から上向き矢印）→「ホーム画面に追加」
+3. ホーム画面の SONE アイコンから開くと、アプリのように全画面で使える
+
+一度開くと、アプリ本体と音がスマホに保存され、電波がなくても使える。
 
 ## 技術
 
 - 素のHTML＋JavaScript（ビルド不要。ファイルを置くだけで動く）
 - 音の再生・生成：Web Audio API
-- 保存：ブラウザ内（画像は IndexedDB）
+- 保存：ブラウザ内（設定・評価・プレイリストは localStorage、画像は IndexedDB）
+- ホーム画面に追加できる形（PWA）：`manifest.webmanifest` と `sw.js`
 
 ## フォルダ構成
 
 ```
-index.html     アプリ本体の入口
-sounds.json    音の一覧
-sounds/        音声ファイル（.mp3 / .m4a）
+index.html            アプリ本体の入口
+manifest.webmanifest  ホーム画面に追加したときの名前・アイコン・色
+sw.js                 電波がなくても使えるようにする仕組み（サービスワーカー）
+sounds.json           音の一覧
+sounds/               音声ファイル（.mp3 / .m4a）
+icons/                アプリのアイコン
+css/style.css         見た目
+js/                   動き（main.js が中心）
 ```
+
+`js/` にファイルを足したときは、`sw.js` の `APP_FILES` にも足すこと（電波がないときにも使えるように保存する一覧）。音声ファイルは `sounds.json` から自動で保存されるので、足さなくてよい。
 
 ## 音の追加方法
 

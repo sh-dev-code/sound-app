@@ -150,7 +150,7 @@ Claude Code への作業ルール：勝手に次のステップへ進まない�
 
 未決事項（開発前または開発中に決める）：
 
-- [ ] アプリ名
+- [x] アプリ名 → SONE（sound と zone を合わせた言葉。状況に合った音を流せる）
 - [x] 最初に入れる環境音の種類と素材の入手先 → 焚き火・雨・波・川・森・カフェ・レジ袋。Freesound の CC0 素材（出典は sounds.json）
 - [x] 公開先のホスティングサービス → GitHub Pages（https://sh-dev-code.github.io/sound-app/）
 - [ ] 無料で配るか、収益化するか。するなら方法

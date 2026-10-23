@@ -196,7 +196,7 @@ function formatTime(seconds) {
 function updateMediaSession(sound) {
   if (!('mediaSession' in navigator) || state.shownSoundId === sound.id) return;
   state.shownSoundId = sound.id;
-  navigator.mediaSession.metadata = new MediaMetadata({ title: sound.name, artist: '音で集中＆寝かしつけ' });
+  navigator.mediaSession.metadata = new MediaMetadata({ title: sound.name, artist: 'SONE' });
 }
 
 // ---- 再生・停止 ----
@@ -897,6 +897,7 @@ const settingsView = createSettingsView({
   settings,
   fileSounds: () => sounds.filter((s) => s.type === 'file'),
   images: (m) => state.images[m],
+  logPanel: $('log-panel'),
   maxImages: MAX_IMAGES_PER_MODE,
   onAddImages: async (m, files) => {
     const room = MAX_IMAGES_PER_MODE - state.images[m].length;
@@ -1142,6 +1143,10 @@ async function init() {
   render();
   showBabyNoticeIfFirstTime();
   refreshImages();
+  // 電波がなくても使えるよう、アプリ本体と音をスマホに保存しておく仕組みを動かす
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch((e) => log(`オフライン対応を準備できませんでした: ${e.message}`));
+  }
   log(`準備完了（マナーモード対策: ${'audioSession' in navigator ? '対応' : '非対応'}）`);
 }
 

@@ -4,7 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f5eee5">
-  <title>音で集中＆寝かしつけ</title>
+  <title>SONE</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SONE">
   <link rel="stylesheet" href="css/style.css">
   <script type="module" src="js/main.js"></script>
 </head>
@@ -86,11 +91,6 @@
       </div>
       <p id="volume-note" class="note">赤ちゃんモードは、音量を一番大きくしても控えめな大きさまでに抑えています。</p>
     </section>
-
-    <details>
-      <summary>動作ログ（開発用）</summary>
-      <ol id="log"></ol>
-    </details>
   </main>
 
   <main id="view-library" hidden>
@@ -107,7 +107,12 @@
 
   <main id="view-playlists" hidden></main>
 
-  <main id="view-settings" hidden></main>
+  <main id="view-settings" hidden>
+    <details id="log-panel">
+      <summary>動作ログ（うまく動かないときの確認用）</summary>
+      <ol id="log"></ol>
+    </details>
+  </main>
 
   <nav class="tabbar" aria-label="画面">
     <button type="button" data-view="play">再生</button>
