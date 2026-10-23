@@ -714,8 +714,10 @@ const imagesFaded = () =>
 
 function renderDisplay() {
   const d = settings.display;
-  // 夜用表示：画面全体に黒い幕を薄くかける（ふわっと暗くなるよう、表示は class で切り替える）
-  els.nightVeil.classList.toggle('on', (isSleeping() && d.sleepNight) || (settings.mode === 'focus' && d.focusNight));
+  // 夜用表示：画面全体に黒い幕を薄くかける（ふわっと暗くなるよう、表示は class で切り替える）。
+  // 寝かしつけでは、準備中に見づらくならないよう、再生中・一時停止中だけ暗くする
+  els.nightVeil.classList.toggle('on',
+    (isSleeping() && d.sleepNight && running()) || (settings.mode === 'focus' && d.focusNight));
 
   const stageOn = stageEligible() && !state.stageHidden;
   const faded = imagesFaded();
@@ -914,6 +916,11 @@ const settingsView = createSettingsView({
   onDeleteImage: async (id) => {
     await deleteImage(id);
     await refreshImages();
+  },
+  // 次にアプリを開いたときから効く
+  onStartup: (key, value) => {
+    settings.startup[key] = value;
+    saveSettings(settings);
   },
   onDisplay: (key, value) => {
     settings.display[key] = value;

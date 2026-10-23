@@ -774,3 +774,6 @@ dialog[open] { animation: fade-in 0.25s ease both; }
     transition: none !important;
   }
 }
+
+/* 選択肢が4つあるときは2列×2段に並べる */
+.segmented-wrap .segmented { grid-auto-flow: row; grid-template-columns: 1fr 1fr; }

@@ -46,7 +46,7 @@ function toggle(text, key, checked) {
 // logPanel は動作ログの部品で、画面の一番下に置く（作り直しても中身が消えないよう、同じ部品を移し替える）
 export function createSettingsView({
   root, settings, fileSounds, images, maxImages, logPanel, onTheme, onCrossfade, onAddActivity, onRemoveActivity,
-  onAddImages, onDeleteImage, onDisplay, onReset,
+  onAddImages, onDeleteImage, onDisplay, onStartup, onReset,
 }) {
   function renderImages() {
     return el('section', {},
@@ -91,6 +91,26 @@ export function createSettingsView({
       el('p', { className: 'note', textContent: '「泣き止み」では、画像を明るいまま表示し続けます。' }),
       el('h3', { className: 'sub', textContent: '集中モード' }),
       toggle('夜用表示（画面を暗くする）', 'focusNight', d.focusNight),
+    );
+  }
+
+  function renderStartup() {
+    const s = settings.startup;
+    const LABELS = {
+      last: '前回のまま', baby: '赤ちゃん', focus: '集中', soothe: '泣き止み', sleep: '寝かしつけ',
+      manual: '選んで再生', omakase: 'おまかせ', playlist: 'プレイリスト',
+    };
+    const label = (v) => LABELS[v];
+    return el('section', {},
+      el('h2', { textContent: 'アプリを開いたとき' }),
+      el('h3', { className: 'sub', textContent: 'モード' }),
+      segmented(['last', 'baby', 'focus'], s.mode, label, 'startupMode'),
+      el('h3', { className: 'sub', textContent: '赤ちゃんモードの使い方' }),
+      segmented(['last', 'soothe', 'sleep'], s.usage, label, 'startupUsage'),
+      el('h3', { className: 'sub', textContent: '集中モードの再生方法' }),
+      el('div', { className: 'segmented-wrap' },
+        segmented(['last', 'manual', 'omakase', 'playlist'], s.playMethod, label, 'startupMethod'),
+      ),
     );
   }
 
@@ -143,6 +163,7 @@ export function createSettingsView({
         el('h2', { textContent: '画面の色' }),
         themes,
       ),
+      renderStartup(),
       renderImages(),
       renderDisplay(),
       el('section', {},
@@ -202,6 +223,12 @@ export function createSettingsView({
       const a = settings.activities.find((x) => x.id === b.dataset.removeActivity);
       if (!confirm(`「${a.name}」を削除しますか？この作業での★評価の記録も消えます。`)) return;
       onRemoveActivity(a.id);
+      render();
+    } else if (b.dataset.startupMode || b.dataset.startupUsage || b.dataset.startupMethod) {
+      const [key, value] = b.dataset.startupMode ? ['mode', b.dataset.startupMode]
+        : b.dataset.startupUsage ? ['usage', b.dataset.startupUsage]
+          : ['playMethod', b.dataset.startupMethod];
+      onStartup(key, value);
       render();
     } else if (b.dataset.deleteImage) {
       if (confirm('この画像を削除しますか？')) onDeleteImage(Number(b.dataset.deleteImage));

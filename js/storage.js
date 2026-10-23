@@ -17,11 +17,13 @@ const DEFAULTS = {
   ],
   // usage: 赤ちゃんモードの使い方。'soothe'（泣き止み：画像を見せ続ける）か 'sleep'（寝かしつけ：暗くして画像を消す）
   // imageStyle: 画像の見せ方。'full'（全画面）、'backdrop'（再生画面の背景。集中モードのみ）、'none'（音だけ）
-  baby: { sound: 'white', volume: 50, timer: 30, usage: 'sleep', imageStyle: 'full' },
+  baby: { sound: 'white', volume: 50, timer: 30, usage: 'soothe', imageStyle: 'full' },
   focus: {
     sound: 'white', volume: 50, focusMin: 25, breakMin: 5, playMethod: 'manual', playlistId: null, activity: null,
     imageStyle: 'backdrop',
   },
+  // アプリを開いたときの状態。'last' は前回のまま
+  startup: { mode: 'last', usage: 'soothe', playMethod: 'last' },
   // 画像の見せ方
   display: {
     slideSeconds: 10, // スライドショーの切り替え間隔
@@ -44,6 +46,7 @@ export function loadSettings() {
       Object.assign(settings.baby, saved.baby);
       Object.assign(settings.focus, saved.focus);
       Object.assign(settings.display, saved.display);
+      Object.assign(settings.startup, saved.startup);
       // 以前の「画像を見せるか（はい／いいえ）」の設定を、見せ方の設定に置き換える
       for (const m of ['baby', 'focus']) {
         if (saved[m]?.showImages === false && !saved[m].imageStyle) settings[m].imageStyle = 'none';
@@ -53,6 +56,11 @@ export function loadSettings() {
   } catch {
     // 保存できない環境（プライベートブラウズなど）では初期値で動かす
   }
+  // 「アプリを開いたとき」の設定があれば、前回の状態より優先する
+  const { startup } = settings;
+  if (startup.mode !== 'last') settings.mode = startup.mode;
+  if (startup.usage !== 'last') settings.baby.usage = startup.usage;
+  if (startup.playMethod !== 'last') settings.focus.playMethod = startup.playMethod;
   return settings;
 }
 
